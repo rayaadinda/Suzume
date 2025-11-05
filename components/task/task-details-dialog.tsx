@@ -23,7 +23,11 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { X, Trash2, Calendar, MessageSquare, Paperclip, Link2, CheckCircle2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { X, Trash2, Calendar as CalendarIcon, MessageSquare, Paperclip, Link2, CheckCircle2 } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { useTasksStore } from '@/store/tasks-store';
 import { getUsers } from '@/app/actions/users';
 import { getLabels } from '@/app/actions/labels';
@@ -281,12 +285,35 @@ export function TaskDetailsDialog({ open, onOpenChange, task }: TaskDetailsDialo
 
               <div className="space-y-2">
                 <Label htmlFor="date">Due Date</Label>
-                <Input
-                  id="date"
-                  type="text"
-                  placeholder="e.g., Jan 25"
-                  {...form.register('date')}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !form.watch('date') && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {form.watch('date') ? (
+                        format(new Date(form.watch('date')), "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={form.watch('date') ? new Date(form.watch('date')) : undefined}
+                      onSelect={(date) => {
+                        form.setValue('date', date ? format(date, 'yyyy-MM-dd') : '')
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -405,11 +432,11 @@ export function TaskDetailsDialog({ open, onOpenChange, task }: TaskDetailsDialo
 
               <div className="flex items-center gap-4 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1">
-                  <Calendar className="size-3" />
+                  <CalendarIcon className="size-3" />
                   <span>Created: {new Date(task.createdAt).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Calendar className="size-3" />
+                  <CalendarIcon className="size-3" />
                   <span>Updated: {new Date(task.updatedAt).toLocaleDateString()}</span>
                 </div>
               </div>
