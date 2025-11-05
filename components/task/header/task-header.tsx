@@ -23,6 +23,7 @@ import { TaskFilters } from "./task-filters"
 import { TaskSort } from "./task-sort"
 import { TaskAutomate } from "./task-automate"
 import { TaskImportExport } from "./task-import-export"
+import { ViewModeSwitcher } from "./view-mode-switcher"
 
 interface TaskHeaderProps {
 	onOpenCommandPalette?: () => void
@@ -103,6 +104,7 @@ export function TaskHeader({ onOpenCommandPalette }: TaskHeaderProps = {}) {
 							<span className="text-xs">⌘K</span>
 						</kbd>
 					</Button>
+					<ViewModeSwitcher />
 					<TaskFilters />
 					<TaskSort />
 					<TaskAutomate />

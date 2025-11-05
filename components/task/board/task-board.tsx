@@ -15,10 +15,12 @@ import { useTasksStore } from '@/store/tasks-store';
 import { statuses } from '@/mock-data/statuses';
 import { TaskColumn } from './task-column';
 import { TaskCard } from './task-card';
+import { ListView } from '../views/list-view';
+import { CalendarView } from '../views/calendar-view';
 import type { TaskWithRelations } from '@/app/actions/tasks';
 
 export function TaskBoard() {
-   const { tasksByStatus, tasks, loading, fetchTasks, updateTaskStatusAction } = useTasksStore();
+   const { tasksByStatus, tasks, loading, fetchTasks, updateTaskStatusAction, viewMode } = useTasksStore();
    const [activeTask, setActiveTask] = useState<TaskWithRelations | null>(null);
 
    const sensors = useSensors(
@@ -57,7 +59,7 @@ export function TaskBoard() {
      }
    };
 
-   if (loading && Object.keys(tasksByStatus).length === 0) {
+   if (loading && Object.keys(tasksByStatus).length === 0 && tasks.length === 0) {
      return (
        <div className="flex h-full items-center justify-center">
          <p className="text-muted-foreground">Loading tasks...</p>
@@ -65,6 +67,16 @@ export function TaskBoard() {
      );
    }
 
+   // Render different views based on viewMode
+   if (viewMode === 'list') {
+     return <ListView tasks={tasks} />;
+   }
+
+   if (viewMode === 'calendar') {
+     return <CalendarView tasks={tasks} />;
+   }
+
+   // Default Kanban view
    return (
      <DndContext
        sensors={sensors}

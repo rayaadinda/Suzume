@@ -23,12 +23,15 @@ function groupTasksByStatus(tasks: TaskWithRelations[]): Record<string, TaskWith
   }, {});
 }
 
+export type ViewMode = 'kanban' | 'list' | 'calendar';
+
 interface TasksState {
   // State
   tasks: TaskWithRelations[];
   tasksByStatus: Record<string, TaskWithRelations[]>;
   loading: boolean;
   error: string | null;
+  viewMode: ViewMode;
   filters: {
     statusId?: string;
     priority?: string;
@@ -39,6 +42,7 @@ interface TasksState {
 
   // Actions
   fetchTasks: () => Promise<void>;
+  setViewMode: (mode: ViewMode) => void;
   addTask: (data: {
     title: string;
     description: string;
@@ -74,6 +78,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   tasksByStatus: {},
   loading: false,
   error: null,
+  viewMode: (typeof window !== 'undefined' && localStorage.getItem('viewMode') as ViewMode) || 'kanban',
   filters: {},
 
   // Fetch all tasks from server
@@ -182,5 +187,13 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       tasks,
       tasksByStatus: groupTasksByStatus(tasks),
     });
+  },
+
+  // Set view mode and persist to localStorage
+  setViewMode: (mode) => {
+    set({ viewMode: mode });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('viewMode', mode);
+    }
   },
 }));
