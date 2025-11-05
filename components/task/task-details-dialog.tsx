@@ -48,6 +48,7 @@ import type { TaskWithRelations } from "@/app/actions/tasks"
 import type { UserData } from "@/app/actions/users"
 import type { LabelData } from "@/app/actions/labels"
 import type { StatusData } from "@/app/actions/statuses"
+import { SubtaskList } from "./subtask-list"
 
 const taskFormSchema = z.object({
 	title: z.string().min(1, "Title is required").max(255),
@@ -425,6 +426,11 @@ export function TaskDetailsDialog({
 								))}
 							</div>
 						</div>
+
+						<Separator />
+
+						{/* Subtasks/Checklist */}
+						<SubtaskList taskId={task.id} />
 
 						<Separator />
 

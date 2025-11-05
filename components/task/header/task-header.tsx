@@ -8,6 +8,7 @@ import { TaskFilters } from "./task-filters"
 import { TaskSort } from "./task-sort"
 import { ViewModeSwitcher } from "./view-mode-switcher"
 import { AdvancedFilters } from "./advanced-filters"
+import { QuickCapture } from "../quick-capture"
 
 interface TaskHeaderProps {
 	onOpenCommandPalette?: () => void
@@ -43,6 +44,7 @@ export function TaskHeader({}: TaskHeaderProps = {}) {
 				<ViewModeSwitcher />
 
 				<div className="flex items-center gap-2">
+					<QuickCapture />
 					<AdvancedFilters />
 					<TaskFilters />
 					<TaskSort />
