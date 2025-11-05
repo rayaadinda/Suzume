@@ -129,7 +129,10 @@ export async function getTasks(filters?: {
 	statusId?: string
 	priority?: string
 	assigneeId?: string
+	labelIds?: string[]
 	search?: string
+	dateFrom?: string
+	dateTo?: string
 	sortBy?: "status" | "priority" | "date" | "alphabetical"
 }): Promise<TaskWithRelations[]> {
 	await getCurrentUser() // Ensure authenticated
@@ -150,6 +153,12 @@ export async function getTasks(filters?: {
 					ilike(tasks.description, `%${filters.search}%`)
 				)
 			)
+		}
+		if (filters?.dateFrom) {
+			conditions.push(eq(tasks.date, filters.dateFrom))
+		}
+		if (filters?.dateTo) {
+			conditions.push(eq(tasks.date, filters.dateTo))
 		}
 
 		// Build and execute query with proper type handling
@@ -223,6 +232,17 @@ export async function getTasks(filters?: {
 					.filter((ta) => ta.user?.id === filters.assigneeId)
 					.map((ta) => ta.taskId)
 			}
+		}
+
+		// Filter by labels if needed
+		if (filters?.labelIds && filters.labelIds.length > 0) {
+			const tasksWithLabels = taskLabelsData
+				.filter((tl) => tl.label && filters.labelIds!.includes(tl.label.id))
+				.map((tl) => tl.taskId)
+
+			// Only keep tasks that have at least one of the specified labels
+			const uniqueTaskIds = Array.from(new Set(tasksWithLabels))
+			filteredTaskIds = filteredTaskIds.filter((id) => uniqueTaskIds.includes(id))
 		}
 
 		// Build the response

@@ -36,7 +36,10 @@ interface TasksState {
     statusId?: string;
     priority?: string;
     assigneeId?: string;
+    labelIds?: string[];
     search?: string;
+    dateFrom?: string;
+    dateTo?: string;
     sortBy?: 'status' | 'priority' | 'date' | 'alphabetical';
   };
 
