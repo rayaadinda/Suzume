@@ -94,6 +94,19 @@ export const tasks = pgTable("tasks", {
 	updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
+// Subtasks table for checklists within tasks
+export const subtasks = pgTable("subtasks", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	taskId: uuid("task_id")
+		.notNull()
+		.references(() => tasks.id, { onDelete: "cascade" }),
+	title: text("title").notNull(),
+	completed: boolean("completed").notNull().default(false),
+	displayOrder: integer("display_order").notNull().default(0),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
 // Junction table for many-to-many relationship between tasks and users (assignees)
 export const taskAssignees = pgTable(
 	"task_assignees",
@@ -157,6 +170,7 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
 	}),
 	assignees: many(taskAssignees),
 	labels: many(taskLabels),
+	subtasks: many(subtasks),
 }))
 
 export const statusesRelations = relations(statuses, ({ many }) => ({
@@ -189,6 +203,13 @@ export const taskLabelsRelations = relations(taskLabels, ({ one }) => ({
 	}),
 }))
 
+export const subtasksRelations = relations(subtasks, ({ one }) => ({
+	task: one(tasks, {
+		fields: [subtasks.taskId],
+		references: [tasks.id],
+	}),
+}))
+
 // ========================================
 // TYPE EXPORTS
 // ========================================
@@ -210,3 +231,6 @@ export type NewTask = typeof tasks.$inferInsert
 
 export type TaskAssignee = typeof taskAssignees.$inferSelect
 export type TaskLabel = typeof taskLabels.$inferSelect
+
+export type Subtask = typeof subtasks.$inferSelect
+export type NewSubtask = typeof subtasks.$inferInsert
