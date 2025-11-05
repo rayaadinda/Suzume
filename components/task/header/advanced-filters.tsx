@@ -97,14 +97,14 @@ export function AdvancedFilters() {
 			if (filters.dateFrom) {
 				try {
 					setDateFrom(new Date(filters.dateFrom))
-				} catch (e) {
+				} catch {
 					setDateFrom(undefined)
 				}
 			}
 			if (filters.dateTo) {
 				try {
 					setDateTo(new Date(filters.dateTo))
-				} catch (e) {
+				} catch {
 					setDateTo(undefined)
 				}
 			}
@@ -152,14 +152,14 @@ export function AdvancedFilters() {
 		if (preset.filters.dateFrom) {
 			try {
 				setDateFrom(new Date(preset.filters.dateFrom))
-			} catch (e) {
+			} catch {
 				setDateFrom(undefined)
 			}
 		}
 		if (preset.filters.dateTo) {
 			try {
 				setDateTo(new Date(preset.filters.dateTo))
-			} catch (e) {
+			} catch {
 				setDateTo(undefined)
 			}
 		}

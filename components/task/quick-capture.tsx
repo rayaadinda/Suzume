@@ -84,14 +84,15 @@ export function QuickCapture({ trigger }: QuickCaptureProps) {
 			// setOpen(false)
 		} catch (error) {
 			toast.error("Failed to capture task", {
-				description: error instanceof Error ? error.message : "Please try again",
+				description:
+					error instanceof Error ? error.message : "Please try again",
 			})
 		} finally {
 			setLoading(false)
 		}
 	}
 
-	const handleCapture Another = () => {
+	const handleCaptureAnother = () => {
 		setTitle("")
 		// Keep other settings the same for batch entry
 		document.getElementById("quick-capture-title")?.focus()
@@ -108,7 +109,7 @@ export function QuickCapture({ trigger }: QuickCaptureProps) {
 					</Button>
 				)}
 			</SheetTrigger>
-			<SheetContent side="right" className="w-full sm:max-w-md">
+			<SheetContent side="right" className="w-full sm:max-w-md p-4">
 				<SheetHeader>
 					<SheetTitle className="flex items-center gap-2">
 						<Inbox className="size-5" />
@@ -158,7 +159,11 @@ export function QuickCapture({ trigger }: QuickCaptureProps) {
 					{/* Priority Select */}
 					<div className="space-y-2">
 						<Label htmlFor="quick-capture-priority">Priority</Label>
-						<Select value={priority} onValueChange={setPriority} disabled={loading}>
+						<Select
+							value={priority}
+							onValueChange={setPriority}
+							disabled={loading}
+						>
 							<SelectTrigger id="quick-capture-priority">
 								<SelectValue />
 							</SelectTrigger>

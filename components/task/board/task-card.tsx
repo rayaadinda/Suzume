@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar"
 import { TaskDetailsDialog } from "../task-details-dialog"
 import { TaskContextMenu } from "../task-context-menu"
+import { PomodoroTimer } from "../pomodoro-timer"
 
 interface TaskCardProps {
 	task: TaskWithRelations
@@ -136,6 +137,13 @@ export function TaskCard({ task }: TaskCardProps) {
 						<div className="flex items-center justify-between flex-wrap gap-2">
 							{/* Left side - metadata */}
 							<div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+								<div onClick={(e) => e.stopPropagation()}>
+									<PomodoroTimer
+										taskId={task.id}
+										taskTitle={task.title}
+										compact
+									/>
+								</div>
 								{task.date && (
 									<div className="flex items-center gap-1.5 border border-border rounded-sm py-1 px-2">
 										<Calendar className="size-3" />
