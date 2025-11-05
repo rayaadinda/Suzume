@@ -1,0 +1,433 @@
+'use server';
+
+import { db } from '@/db';
+import { tasks, taskAssignees, taskLabels, statuses, users, labels } from '@/db/schema';
+import { eq, and, inArray, desc, asc, or, ilike } from 'drizzle-orm';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
+import { revalidatePath } from 'next/cache';
+
+// Type for task with all relations populated
+export type TaskWithRelations = {
+  id: string;
+  title: string;
+  description: string;
+  statusId: string;
+  date: string | null;
+  commentsCount: number;
+  attachmentsCount: number;
+  linksCount: number;
+  progressCompleted: number;
+  progressTotal: number;
+  priority: string;
+  createdAt: Date;
+  updatedAt: Date;
+  status: {
+    id: string;
+    name: string;
+    color: string;
+    displayOrder: number;
+  };
+  assignees: Array<{
+    id: string;
+    name: string;
+    email: string;
+    image: string | null;
+  }>;
+  labels: Array<{
+    id: string;
+    name: string;
+    color: string;
+  }>;
+};
+
+// Helper function to get current user session
+async function getCurrentUser() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session) {
+    throw new Error('Unauthorized');
+  }
+
+  return session.user;
+}
+
+// Helper function to broadcast updates to WebSocket clients
+async function broadcastTaskUpdate(type: string, taskData: any) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.session.token) {
+      return; // No session, skip broadcast
+    }
+
+    const response = await fetch(process.env.NEXT_PUBLIC_WS_URL?.replace('/ws', '/api/broadcast') || 'http://localhost:8080/api/broadcast', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.session.token}`,
+      },
+      body: JSON.stringify({
+        type,
+        data: taskData,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to broadcast update:', await response.text());
+    }
+  } catch (error) {
+    console.error('Error broadcasting update:', error);
+    // Don't throw - broadcast failures shouldn't break the main operation
+  }
+}
+
+// GET all tasks with relations
+export async function getTasks(filters?: {
+  statusId?: string;
+  priority?: string;
+  assigneeId?: string;
+  search?: string;
+  sortBy?: 'status' | 'priority' | 'date' | 'alphabetical';
+}): Promise<TaskWithRelations[]> {
+  await getCurrentUser(); // Ensure authenticated
+
+  try {
+    // Build where conditions
+    const conditions = [];
+    if (filters?.statusId) {
+      conditions.push(eq(tasks.statusId, filters.statusId));
+    }
+    if (filters?.priority && filters.priority !== 'all') {
+      conditions.push(eq(tasks.priority, filters.priority));
+    }
+    if (filters?.search) {
+      conditions.push(
+        or(
+          ilike(tasks.title, `%${filters.search}%`),
+          ilike(tasks.description, `%${filters.search}%`)
+        )
+      );
+    }
+
+    // Query tasks
+    let query = db
+      .select({
+        task: tasks,
+        status: statuses,
+      })
+      .from(tasks)
+      .leftJoin(statuses, eq(tasks.statusId, statuses.id));
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    // Apply sorting
+    if (filters?.sortBy === 'alphabetical') {
+      query = query.orderBy(asc(tasks.title)) as any;
+    } else if (filters?.sortBy === 'priority') {
+      query = query.orderBy(desc(tasks.priority)) as any;
+    } else if (filters?.sortBy === 'date') {
+      query = query.orderBy(desc(tasks.createdAt)) as any;
+    } else {
+      query = query.orderBy(asc(statuses.displayOrder), desc(tasks.createdAt)) as any;
+    }
+
+    const results = await query;
+
+    // Get all task IDs
+    const taskIds = results.map((r) => r.task.id);
+
+    if (taskIds.length === 0) {
+      return [];
+    }
+
+    // Get assignees for all tasks
+    const taskAssigneesData = await db
+      .select({
+        taskId: taskAssignees.taskId,
+        user: users,
+      })
+      .from(taskAssignees)
+      .leftJoin(users, eq(taskAssignees.userId, users.id))
+      .where(inArray(taskAssignees.taskId, taskIds));
+
+    // Get labels for all tasks
+    const taskLabelsData = await db
+      .select({
+        taskId: taskLabels.taskId,
+        label: labels,
+      })
+      .from(taskLabels)
+      .leftJoin(labels, eq(taskLabels.labelId, labels.id))
+      .where(inArray(taskLabels.taskId, taskIds));
+
+    // Filter by assignee if needed
+    let filteredTaskIds = taskIds;
+    if (filters?.assigneeId && filters.assigneeId !== 'all') {
+      if (filters.assigneeId === 'unassigned') {
+        const assignedTaskIds = new Set(taskAssigneesData.map(ta => ta.taskId));
+        filteredTaskIds = taskIds.filter(id => !assignedTaskIds.has(id));
+      } else {
+        filteredTaskIds = taskAssigneesData
+          .filter(ta => ta.user?.id === filters.assigneeId)
+          .map(ta => ta.taskId);
+      }
+    }
+
+    // Build the response
+    const tasksWithRelations: TaskWithRelations[] = results
+      .filter(r => filteredTaskIds.includes(r.task.id))
+      .map((result) => {
+        const taskAssigneesList = taskAssigneesData
+          .filter((ta) => ta.taskId === result.task.id && ta.user)
+          .map((ta) => ({
+            id: ta.user!.id,
+            name: ta.user!.name,
+            email: ta.user!.email,
+            image: ta.user!.image,
+          }));
+
+        const taskLabelsList = taskLabelsData
+          .filter((tl) => tl.taskId === result.task.id && tl.label)
+          .map((tl) => ({
+            id: tl.label!.id,
+            name: tl.label!.name,
+            color: tl.label!.color,
+          }));
+
+        return {
+          id: result.task.id,
+          title: result.task.title,
+          description: result.task.description,
+          statusId: result.task.statusId,
+          date: result.task.date,
+          commentsCount: result.task.commentsCount,
+          attachmentsCount: result.task.attachmentsCount,
+          linksCount: result.task.linksCount,
+          progressCompleted: result.task.progressCompleted,
+          progressTotal: result.task.progressTotal,
+          priority: result.task.priority,
+          createdAt: result.task.createdAt,
+          updatedAt: result.task.updatedAt,
+          status: {
+            id: result.status!.id,
+            name: result.status!.name,
+            color: result.status!.color,
+            displayOrder: result.status!.displayOrder,
+          },
+          assignees: taskAssigneesList,
+          labels: taskLabelsList,
+        };
+      });
+
+    return tasksWithRelations;
+  } catch (error) {
+    console.error('Error fetching tasks:', error);
+    throw new Error('Failed to fetch tasks');
+  }
+}
+
+// CREATE a new task
+export async function createTask(data: {
+  title: string;
+  description: string;
+  statusId: string;
+  priority: string;
+  assigneeIds?: string[];
+  labelIds?: string[];
+  date?: string;
+}): Promise<TaskWithRelations> {
+  await getCurrentUser(); // Ensure authenticated
+
+  try {
+    // Insert the task
+    const [newTask] = await db
+      .insert(tasks)
+      .values({
+        title: data.title,
+        description: data.description,
+        statusId: data.statusId,
+        priority: data.priority,
+        date: data.date,
+      })
+      .returning();
+
+    // Add assignees
+    if (data.assigneeIds && data.assigneeIds.length > 0) {
+      await db.insert(taskAssignees).values(
+        data.assigneeIds.map((userId) => ({
+          taskId: newTask.id,
+          userId,
+        }))
+      );
+    }
+
+    // Add labels
+    if (data.labelIds && data.labelIds.length > 0) {
+      await db.insert(taskLabels).values(
+        data.labelIds.map((labelId) => ({
+          taskId: newTask.id,
+          labelId,
+        }))
+      );
+    }
+
+    // Fetch the complete task with relations
+    const [completeTask] = await getTasks();
+    const createdTask = completeTask; // Get the first task (just created)
+
+    // Broadcast the update
+    await broadcastTaskUpdate('task_created', {
+      id: newTask.id,
+      title: newTask.title,
+      statusId: newTask.statusId,
+    });
+
+    revalidatePath('/');
+    return createdTask;
+  } catch (error) {
+    console.error('Error creating task:', error);
+    throw new Error('Failed to create task');
+  }
+}
+
+// UPDATE a task
+export async function updateTask(
+  taskId: string,
+  updates: Partial<{
+    title: string;
+    description: string;
+    statusId: string;
+    priority: string;
+    date: string;
+    progressCompleted: number;
+    progressTotal: number;
+    assigneeIds: string[];
+    labelIds: string[];
+  }>
+): Promise<TaskWithRelations> {
+  await getCurrentUser(); // Ensure authenticated
+
+  try {
+    // Update the task
+    const taskUpdates: any = {};
+    if (updates.title !== undefined) taskUpdates.title = updates.title;
+    if (updates.description !== undefined) taskUpdates.description = updates.description;
+    if (updates.statusId !== undefined) taskUpdates.statusId = updates.statusId;
+    if (updates.priority !== undefined) taskUpdates.priority = updates.priority;
+    if (updates.date !== undefined) taskUpdates.date = updates.date;
+    if (updates.progressCompleted !== undefined) taskUpdates.progressCompleted = updates.progressCompleted;
+    if (updates.progressTotal !== undefined) taskUpdates.progressTotal = updates.progressTotal;
+
+    if (Object.keys(taskUpdates).length > 0) {
+      taskUpdates.updatedAt = new Date();
+      await db.update(tasks).set(taskUpdates).where(eq(tasks.id, taskId));
+    }
+
+    // Update assignees if provided
+    if (updates.assigneeIds !== undefined) {
+      await db.delete(taskAssignees).where(eq(taskAssignees.taskId, taskId));
+      if (updates.assigneeIds.length > 0) {
+        await db.insert(taskAssignees).values(
+          updates.assigneeIds.map((userId) => ({
+            taskId,
+            userId,
+          }))
+        );
+      }
+    }
+
+    // Update labels if provided
+    if (updates.labelIds !== undefined) {
+      await db.delete(taskLabels).where(eq(taskLabels.taskId, taskId));
+      if (updates.labelIds.length > 0) {
+        await db.insert(taskLabels).values(
+          updates.labelIds.map((labelId) => ({
+            taskId,
+            labelId,
+          }))
+        );
+      }
+    }
+
+    // Fetch the updated task
+    const allTasks = await getTasks();
+    const updatedTask = allTasks.find((t) => t.id === taskId);
+
+    if (!updatedTask) {
+      throw new Error('Task not found after update');
+    }
+
+    // Broadcast the update
+    await broadcastTaskUpdate('task_updated', {
+      id: taskId,
+      ...updates,
+    });
+
+    revalidatePath('/');
+    return updatedTask;
+  } catch (error) {
+    console.error('Error updating task:', error);
+    throw new Error('Failed to update task');
+  }
+}
+
+// UPDATE task status (for drag-and-drop)
+export async function updateTaskStatus(taskId: string, newStatusId: string): Promise<TaskWithRelations> {
+  await getCurrentUser(); // Ensure authenticated
+
+  try {
+    await db
+      .update(tasks)
+      .set({
+        statusId: newStatusId,
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, taskId));
+
+    // Fetch the updated task
+    const allTasks = await getTasks();
+    const updatedTask = allTasks.find((t) => t.id === taskId);
+
+    if (!updatedTask) {
+      throw new Error('Task not found after status update');
+    }
+
+    // Broadcast the update
+    await broadcastTaskUpdate('task_status_changed', {
+      id: taskId,
+      statusId: newStatusId,
+    });
+
+    revalidatePath('/');
+    return updatedTask;
+  } catch (error) {
+    console.error('Error updating task status:', error);
+    throw new Error('Failed to update task status');
+  }
+}
+
+// DELETE a task
+export async function deleteTask(taskId: string): Promise<void> {
+  await getCurrentUser(); // Ensure authenticated
+
+  try {
+    await db.delete(tasks).where(eq(tasks.id, taskId));
+
+    // Broadcast the update
+    await broadcastTaskUpdate('task_deleted', {
+      id: taskId,
+    });
+
+    revalidatePath('/');
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    throw new Error('Failed to delete task');
+  }
+}

@@ -1,0 +1,3 @@
+ALTER TABLE "accounts" ADD COLUMN "created_at" timestamp DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "accounts" ADD COLUMN "updated_at" timestamp DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "token" text NOT NULL;
