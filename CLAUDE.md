@@ -667,13 +667,31 @@ JWT_SECRET=                        # MUST match BETTER_AUTH_SECRET
 
 **Sprint 2 Status**: ✅ COMPLETED (November 5, 2025)
 
-**Next Steps (Sprint 3 - Phase 3: Productivity Features):**
+**Sprint 3 Progress** - November 5, 2025
 
-- Time Tracking & Pomodoro - Focus timer with analytics
-- Quick Capture Inbox - Rapid task capture (GTD style)
-- Daily Planning View - Today's focus with time blocking
-- Recurring Tasks & Templates - Repeating tasks
-- Subtasks & Checklists - Break down complex tasks
+Phase 3 (Productivity Features) - 3 of 5 features COMPLETED:
+
+- ✅ **Quick Capture Inbox** - Rapid task capture with Cmd+Shift+N shortcut
+  - Sheet/drawer component for minimal-friction task entry
+  - Batch capture mode for adding multiple tasks quickly
+  - Quick status and priority selection
+  - Integrated into task header
+- ✅ **Subtasks & Checklists** - Task breakdown with progress tracking
+  - Database schema with subtasks table and cascade delete
+  - Collapsible checklist UI with drag handles
+  - Inline editing, completion toggle, progress bar
+  - Integrated into task details dialog
+  - Server actions for full CRUD operations
+- ✅ **Time Tracking & Pomodoro Timer** - Focus timer with session tracking
+  - 25/5/15 minute presets (focus/short break/long break)
+  - Customizable durations
+  - Session counter with auto-switching
+  - Browser notifications on completion
+  - Compact and standalone views
+- ⏸️ **Daily Planning View** - Today's focus (pending)
+- ⏸️ **Recurring Tasks & Templates** - Repeating tasks (pending)
+
+**Sprint 3 Status**: 🚧 IN PROGRESS (60% complete - 3/5 features)
 
 ---
 
@@ -717,31 +735,58 @@ JWT_SECRET=                        # MUST match BETTER_AUTH_SECRET
    - Server Actions: Enhanced `getTasks()` to filter by labels and date ranges
    - Integration: Added to task header alongside existing filters
 
-#### **Phase 3: Productivity Features** ⚡
+#### **Phase 3: Productivity Features** ⚡ (3/5 COMPLETED)
 
-9. **Time Tracking & Pomodoro** - Focus timer with analytics
+9. **Time Tracking & Pomodoro** ✅ IMPLEMENTED - Focus timer with session tracking
 
-   - Components: `progress`, `spinner`
-   - Time estimates vs actual, focus mode integration
+   - Components: `progress` ✅, `sheet` ✅
+   - File: `components/task/pomodoro-timer.tsx`
+   - Features:
+     - 25/5/15 minute presets (focus, short break, long break)
+     - Customizable timer durations via settings
+     - Session counter with automatic mode switching
+     - Browser notifications on completion
+     - Compact view (popover) and standalone view
+     - Play/pause, reset controls with progress bar
+   - Integration: Can be embedded in task cards or used standalone
 
-10. **Quick Capture Inbox** - Rapid task capture (GTD style)
+10. **Quick Capture Inbox** ✅ IMPLEMENTED - Rapid task capture with keyboard shortcut
 
-    - Component: `drawer` (mobile) / `sheet`
-    - Process inbox later, batch actions
+    - Component: `sheet` ✅
+    - File: `components/task/quick-capture.tsx`
+    - Features:
+      - Keyboard shortcut: Cmd+Shift+N / Ctrl+Shift+N
+      - Minimal friction form (title, status, priority)
+      - Batch capture mode (stays open for multiple entries)
+      - Success toasts with task confirmation
+      - ESC to close, Enter to submit
+    - Integration: Added to task header with prominent button
 
-11. **Daily Planning View** - Today's focus with time blocking
+11. **Daily Planning View** - Today's focus with time blocking (PENDING)
 
     - Components: `calendar`, `progress`
     - Morning planning checklist, daily goals
 
-12. **Recurring Tasks & Templates** - Repeating tasks
+12. **Recurring Tasks & Templates** - Repeating tasks (PENDING)
 
     - Components: `calendar`, `badge`
     - Daily/weekly/monthly repeats, checklist templates
 
-13. **Subtasks & Checklists** - Break down complex tasks
-    - Component: `collapsible`
-    - Nested checklist progress tracking
+13. **Subtasks & Checklists** ✅ IMPLEMENTED - Task breakdown with collapsible UI
+    - Components: `collapsible` ✅, `progress` ✅
+    - Files:
+      - `db/schema.ts` - Added subtasks table with relations
+      - `app/actions/subtasks.ts` - Server actions (CRUD)
+      - `components/task/subtask-list.tsx` - UI component
+    - Features:
+      - Collapsible checklist with progress tracking
+      - Inline editing (click to edit subtask title)
+      - Completion toggle with visual feedback
+      - Delete with confirmation toast
+      - Drag handles for reordering (visual only)
+      - Progress bar showing % complete
+      - Quick add input at bottom
+    - Integration: Embedded in task details dialog
 
 #### **Phase 4: Knowledge Management** 📝
 
