@@ -18,6 +18,7 @@ export const auth = betterAuth({
 		enabled: true,
 		autoSignIn: true,
 	},
+	secret: process.env.BETTER_AUTH_SECRET!,
 	session: {
 		expiresIn: 60 * 60 * 24 * 7, // 7 days
 		updateAge: 60 * 60 * 24, // 1 day

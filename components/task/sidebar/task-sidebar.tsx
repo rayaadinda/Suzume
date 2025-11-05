@@ -2,9 +2,9 @@
 
 import {
 	Bell,
-	LayoutGrid,
 	Circle,
 	Star,
+	House,
 	FileCheck,
 	FileText,
 	Calendar,
@@ -14,8 +14,6 @@ import {
 	Paperclip,
 	Folder,
 	Mail,
-	HelpCircle,
-	ArrowUpRight,
 	Layers,
 	CreditCard,
 	Navigation,
@@ -25,7 +23,7 @@ import {
 	LogOut,
 } from "lucide-react"
 import { signOut } from "@/lib/auth-client"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
 	Sidebar,
@@ -51,9 +49,37 @@ interface SidebarItemProps {
 	label: string
 	badge?: string
 	active?: boolean
+	href?: string
 }
 
-function SidebarItem({ icon, label, badge, active }: SidebarItemProps) {
+function SidebarItem({ icon, label, badge, active, href }: SidebarItemProps) {
+	if (href) {
+		return (
+			<Button
+				variant="ghost"
+				className={cn(
+					"w-full justify-between px-3 py-2 h-auto text-sm",
+					active
+						? "bg-muted text-foreground font-medium"
+						: "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+				)}
+				asChild
+			>
+				<Link href={href}>
+					<div className="flex items-center gap-3">
+						{icon}
+						<span>{label}</span>
+					</div>
+					{badge && (
+						<div className="bg-red-500 text-white text-xs rounded-full size-5 flex items-center justify-center">
+							{badge}
+						</div>
+					)}
+				</Link>
+			</Button>
+		)
+	}
+
 	return (
 		<Button
 			variant="ghost"
@@ -102,6 +128,7 @@ export function TaskSidebar({
 	...props
 }: React.ComponentProps<typeof Sidebar>) {
 	const router = useRouter()
+	const pathname = usePathname()
 
 	const handleLogout = async () => {
 		await signOut()
@@ -190,14 +217,21 @@ export function TaskSidebar({
 						badge="12"
 					/>
 					<SidebarItem
-						icon={<LayoutGrid className="size-4" />}
+						icon={<House className="size-4" />}
 						label="Dashboard"
+						href="/dashboard"
+						active={pathname === "/dashboard"}
 					/>
 					<SidebarItem
 						icon={<Circle className="size-4" />}
 						label="Assigned to me"
 					/>
-					<SidebarItem icon={<Star className="size-4" />} label="Task" active />
+					<SidebarItem
+						icon={<FileCheck className="size-4" />}
+						label="Task"
+						href="/tasks"
+						active={pathname === "/tasks"}
+					/>
 					<SidebarItem
 						icon={<FileCheck className="size-4" />}
 						label="Projects"

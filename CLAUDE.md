@@ -4,6 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🎉 Recent Updates
 
+**Sprint 2 Progress** - January 2025
+
+Phase 2 (Views & Navigation) features:
+
+- ✅ **Multiple View Modes** - Kanban/List/Calendar views with toggle switcher
+  - ViewModeSwitcher component with localStorage persistence
+  - ListView with sortable table (title, status, priority, date)
+  - CalendarView with date-based task organization
+  - Conditional rendering in TaskBoard
+- ✅ **Dashboard/Analytics** - Comprehensive productivity metrics
+  - Analytics calculation functions (lib/analytics.ts)
+  - Task completion trends (7-day area chart)
+  - Priority & status distribution charts (pie & bar)
+  - Productivity metrics cards (total, completed, weekly progress, overdue)
+  - Top contributors/assignees tracking
+- ✅ **Date Picker Enhancement** - Real date selection with shadcn Calendar
+  - Replaced text input with Popover + Calendar component
+  - Proper date formatting (display vs storage)
+  - Applied to both task-dialog and task-details-dialog
+
 **Task Dialog Revamp** - January 2025
 
 - ✨ Revamped task creation/editing dialog with modern field components
@@ -100,6 +120,35 @@ go mod tidy                   # Install/update dependencies
     └────────────┘
 ```
 
+### Route Structure (Next.js App Router)
+
+```
+app/
+├── layout.tsx                    # Root layout (Theme provider, Toaster)
+├── page.tsx                      # Root page (redirects to /tasks)
+├── (dashboard)/                  # Route group with shared layout
+│   ├── layout.tsx               # Sidebar + Header layout for all dashboard pages
+│   ├── tasks/
+│   │   └── page.tsx            # Task board page (kanban view)
+│   └── dashboard/
+│       └── page.tsx            # Analytics dashboard
+├── login/
+│   └── page.tsx                # Login page
+├── signup/
+│   └── page.tsx                # Signup page
+└── api/
+    └── auth/
+        └── [...all]/
+            └── route.ts        # BetterAuth API routes
+```
+
+**Key Points:**
+
+- Root `/` redirects to `/tasks`
+- `(dashboard)` is a route group that wraps both `/tasks` and `/dashboard` with the same layout
+- Layout includes: Sidebar, Header, WebSocket provider, Command palette
+- Both routes share the same navigation and real-time updates
+
 ### Data Flow
 
 **Authentication Flow:**
@@ -153,19 +202,29 @@ The application uses **Zustand with Server Actions**:
 ### Component Hierarchy
 
 ```
-app/page.tsx
-├── WebSocketProvider (real-time connection manager)
-└── SidebarProvider
-    ├── TaskSidebar (with logout button)
-    └── Main Layout
-        ├── TaskHeader
-        │   ├── TaskFilters (can apply filters via store)
-        │   ├── TaskSort (can apply sorting via store)
-        │   ├── TaskImportExport
-        │   └── TaskAutomate
-        └── TaskBoard (fetches tasks on mount)
-            └── TaskColumn (mapped per status)
-                └── TaskCard (individual tasks)
+app/layout.tsx (Root - Theme, Toaster)
+│
+├── app/page.tsx → redirects to /tasks
+│
+└── app/(dashboard)/layout.tsx (Shared layout for tasks & dashboard)
+    ├── WebSocketProvider (real-time connection manager)
+    ├── SidebarProvider
+    │   ├── TaskSidebar (with navigation & logout)
+    │   └── SidebarInset
+    │       ├── TaskHeader (filters, sort, command palette trigger)
+    │       └── main
+    │           ├── /tasks → TaskBoard
+    │           │   └── TaskColumn (mapped per status)
+    │           │       └── TaskCard (individual tasks)
+    │           │
+    │           └── /dashboard → DashboardPage
+    │               ├── Metrics Cards
+    │               ├── Completion Trend Chart
+    │               ├── Priority Distribution Chart
+    │               ├── Status Distribution Chart
+    │               └── Top Contributors List
+    │
+    └── CommandPalette (Cmd+K global search)
 ```
 
 ### Database Schema (Drizzle ORM)
@@ -477,27 +536,40 @@ JWT_SECRET=                        # MUST match BETTER_AUTH_SECRET
 
 **Next Steps (Sprint 2):**
 
-- Multiple View Modes (Kanban/List/Calendar)
-- Dashboard/Analytics
-- Advanced Search & Filters (enhanced)
+- ~~Multiple View Modes (Kanban/List/Calendar)~~ ✅ COMPLETED
+- ~~Dashboard/Analytics~~ ✅ COMPLETED
+- Advanced Search & Filters (enhanced) - IN PROGRESS
 
 ---
 
-#### **Phase 2: Views & Navigation** 📊
+#### **Phase 2: Views & Navigation** 📊 (2/3 COMPLETED)
 
-6. **Multiple View Modes** - Kanban/List/Calendar/Timeline views
+6. **Multiple View Modes** ✅ IMPLEMENTED - Kanban/List/Calendar views
 
-   - Components: `toggle-group`, `data-table-demo`, `calendar`
-   - View switcher in header
+   - Components: `toggle-group` ✅, `table` ✅, `calendar` ✅
+   - File: `components/task/header/view-mode-switcher.tsx`
+   - View switcher in header with localStorage persistence
+   - ListView: `components/task/views/list-view.tsx` - Sortable table
+   - CalendarView: `components/task/views/calendar-view.tsx` - Date-based view
+   - Zustand store: Added viewMode state management
 
-7. **Dashboard/Analytics** - Task completion trends & productivity metrics
+7. **Dashboard/Analytics** ✅ IMPLEMENTED - Task completion trends & productivity metrics
 
-   - Component: `chart` (area, bar, line, pie charts)
-   - Burndown charts, heatmaps, time analysis
+   - Components: `chart` ✅, `tabs` ✅
+   - Route: `app/dashboard/page.tsx`
+   - Analytics: `lib/analytics.ts` - Calculation functions
+   - Features:
+     - Task metrics cards (total, completed, weekly progress, overdue)
+     - Completion trend chart (7-day area chart)
+     - Priority distribution (pie chart)
+     - Status distribution (bar chart)
+     - Top contributors tracking
+   - Navigation: Added dashboard link in sidebar
 
-8. **Advanced Search & Filters** - Full-text search with saved presets
+8. **Advanced Search & Filters** - Full-text search with saved presets (PENDING)
    - Components: `input-group`, `combobox`
    - Date ranges, multiple labels, complex queries
+   - Filter presets functionality
 
 #### **Phase 3: Productivity Features** ⚡
 
@@ -698,7 +770,7 @@ Use these MCP tools to discover and add components:
 
 ## Notes
 
-- **Status workflow**: 6 hardcoded statuses (Backlog → Todo → In Progress → Technical Review → Paused → Completed)
+- **Status workflow**: 4 hardcoded statuses (Backlog → Todo → In Progress → Completed)
 - **Performance**: `groupTasksByStatus()` recomputes on every mutation. For 1000+ tasks, optimize with incremental updates
 - **WebSocket**: Clients auto-reconnect with exponential backoff (max 5 attempts)
 - **Server Actions**: Always call `getCurrentUser()` to ensure authentication

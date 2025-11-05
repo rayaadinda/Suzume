@@ -69,11 +69,10 @@ export function TaskCard({ task }: TaskCardProps) {
 					ref={setNodeRef}
 					style={style}
 					className={cn(
-						"bg-background shrink-0 rounded-lg overflow-hidden border border-border cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors",
+						"bg-linear-to-br from-card/90 via-card to-card/80 backdrop-blur-sm shrink-0 rounded-lg overflow-hidden border border-border/50 cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all duration-200",
 						isDragging && "opacity-50"
 					)}
 				>
-					{/* Main content */}
 					<div
 						className="px-3 py-2.5"
 						{...listeners}
@@ -128,9 +127,8 @@ export function TaskCard({ task }: TaskCardProps) {
 						)}
 					</div>
 
-					{/* Footer with metadata */}
 					<div
-						className="px-3 py-2.5 border-t border-border border-dashed"
+						className="px-3 py-2.5 border-t border-border/30 border-dashed bg-muted/5"
 						{...listeners}
 						{...attributes}
 						onClick={handleClick}
