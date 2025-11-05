@@ -4,6 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🎉 Recent Updates
 
+**User Profile Integration with TanStack Query** - January 2025
+
+- ✅ **TanStack Query Setup** - Integrated React Query for server state management
+  - QueryProvider wrapper in root layout
+  - Custom `useUser()` hook for fetching user data
+  - API endpoint `/api/user/[id]` for user profile retrieval
+  - Loading states and error handling
+- ✅ **NavUser Component** - Dynamic user profile in sidebar
+  - Fetches authenticated user data from database
+  - Shows avatar with fallback to initials
+  - Loading skeleton while fetching
+  - Functional logout with proper session cleanup
+- ✅ **Settings Page Enhancement** - User profile management
+  - Displays current user data (name, email, avatar)
+  - Loading states for better UX
+  - Form fields pre-populated with user data
+  - Avatar display with initials fallback
+
 **Sprint 2 Progress** - January 2025
 
 Phase 2 (Views & Navigation) features:
@@ -49,7 +67,7 @@ All features tested and working. See [Project Vision & Feature Roadmap](#project
 
 A **self-hosted task management application** with a Kanban-style interface for managing tasks across 6 status columns. Built with Next.js 16, React 19, TypeScript, Go backend, BetterAuth authentication, Drizzle ORM with Supabase PostgreSQL, and real-time WebSocket updates.
 
-**Frontend Stack**: Next.js 16, React 19, Zustand, BetterAuth, Drizzle ORM, Radix UI, Tailwind CSS 4, TypeScript 5
+**Frontend Stack**: Next.js 16, React 19, Zustand, TanStack Query, BetterAuth, Drizzle ORM, Radix UI, Tailwind CSS 4, TypeScript 5
 **Backend Stack**: Go 1.21+, Gin web framework, Gorilla WebSocket, JWT authentication
 **Database**: Supabase PostgreSQL with Drizzle ORM
 
@@ -99,6 +117,7 @@ go mod tidy                   # Install/update dependencies
 │  │  Next.js App (http://localhost:3000)                 │  │
 │  │  • BetterAuth (email/password auth)                  │  │
 │  │  • Protected routes via middleware                   │  │
+│  │  • TanStack Query (server state management)          │  │
 │  │  • Zustand store (client state)                      │  │
 │  │  • Server Actions (Drizzle ORM)                      │  │
 │  │  • WebSocket client (real-time)                      │  │
@@ -124,30 +143,37 @@ go mod tidy                   # Install/update dependencies
 
 ```
 app/
-├── layout.tsx                    # Root layout (Theme provider, Toaster)
+├── layout.tsx                    # Root layout (QueryProvider, Theme provider, Toaster)
 ├── page.tsx                      # Root page (redirects to /tasks)
 ├── (dashboard)/                  # Route group with shared layout
 │   ├── layout.tsx               # Sidebar + Header layout for all dashboard pages
 │   ├── tasks/
 │   │   └── page.tsx            # Task board page (kanban view)
-│   └── dashboard/
-│       └── page.tsx            # Analytics dashboard
+│   ├── dashboard/
+│   │   └── page.tsx            # Analytics dashboard
+│   └── settings/
+│       └── page.tsx            # User settings & profile
 ├── login/
 │   └── page.tsx                # Login page
 ├── signup/
 │   └── page.tsx                # Signup page
 └── api/
-    └── auth/
-        └── [...all]/
-            └── route.ts        # BetterAuth API routes
+    ├── auth/
+    │   └── [...all]/
+    │       └── route.ts        # BetterAuth API routes
+    └── user/
+        └── [id]/
+            └── route.ts        # User profile API endpoint
 ```
 
 **Key Points:**
 
 - Root `/` redirects to `/tasks`
-- `(dashboard)` is a route group that wraps both `/tasks` and `/dashboard` with the same layout
+- `(dashboard)` is a route group that wraps `/tasks`, `/dashboard`, and `/settings` with the same layout
 - Layout includes: Sidebar, Header, WebSocket provider, Command palette
-- Both routes share the same navigation and real-time updates
+- All dashboard routes share the same navigation and real-time updates
+- TanStack Query manages server state (user profiles, etc.)
+- Zustand manages client state (tasks, filters, UI state)
 
 ### Data Flow
 
@@ -202,14 +228,15 @@ The application uses **Zustand with Server Actions**:
 ### Component Hierarchy
 
 ```
-app/layout.tsx (Root - Theme, Toaster)
+app/layout.tsx (Root - QueryProvider, Theme, Toaster)
 │
 ├── app/page.tsx → redirects to /tasks
 │
-└── app/(dashboard)/layout.tsx (Shared layout for tasks & dashboard)
+└── app/(dashboard)/layout.tsx (Shared layout for tasks & dashboard & settings)
     ├── WebSocketProvider (real-time connection manager)
     ├── SidebarProvider
-    │   ├── TaskSidebar (with navigation & logout)
+    │   ├── TaskSidebar (with navigation, user profile, logout)
+    │   │   └── NavUser (TanStack Query - user profile)
     │   └── SidebarInset
     │       ├── TaskHeader (filters, sort, command palette trigger)
     │       └── main
@@ -217,12 +244,19 @@ app/layout.tsx (Root - Theme, Toaster)
     │           │   └── TaskColumn (mapped per status)
     │           │       └── TaskCard (individual tasks)
     │           │
-    │           └── /dashboard → DashboardPage
-    │               ├── Metrics Cards
-    │               ├── Completion Trend Chart
-    │               ├── Priority Distribution Chart
-    │               ├── Status Distribution Chart
-    │               └── Top Contributors List
+    │           ├── /dashboard → DashboardPage
+    │           │   ├── Metrics Cards
+    │           │   ├── Completion Trend Chart
+    │           │   ├── Priority Distribution Chart
+    │           │   ├── Status Distribution Chart
+    │           │   └── Top Contributors List
+    │           │
+    │           └── /settings → SettingsPage
+    │               ├── Profile Tab (TanStack Query - user data)
+    │               ├── Notifications Tab
+    │               ├── Security Tab
+    │               ├── Appearance Tab
+    │               └── Data Tab
     │
     └── CommandPalette (Cmd+K global search)
 ```
@@ -262,6 +296,10 @@ app/layout.tsx (Root - Theme, Toaster)
 - `getUsers()` - Get all users (for assignee dropdowns)
 - `getCurrentUserData()` - Get logged-in user
 
+**API Routes:**
+
+- `GET /api/user/[id]` - Fetch user profile by ID (used by TanStack Query)
+
 **labels.ts:**
 
 - `getLabels()` - Get all labels
@@ -288,7 +326,14 @@ app/layout.tsx (Root - Theme, Toaster)
 
 **Logout Flow:**
 
-- Sidebar logout button → `signOut()` → redirect to `/login`
+- NavUser dropdown logout → `signOut()` → redirect to `/login`
+
+**User Profile Management:**
+
+- TanStack Query hook: `useUser()` fetches authenticated user data
+- API endpoint: `GET /api/user/[id]` returns user profile
+- Used in: NavUser component (sidebar), Settings page
+- Automatic session integration with BetterAuth
 
 ### WebSocket Integration
 
@@ -314,6 +359,71 @@ app/layout.tsx (Root - Theme, Toaster)
 - Message format: `{ type: string, payload: object }`
 
 ## Key Development Patterns
+
+### Using TanStack Query for Server State
+
+**Setup** (`components/query-provider.tsx`):
+
+```typescript
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+	const [queryClient] = useState(
+		() =>
+			new QueryClient({
+				defaultOptions: {
+					queries: {
+						staleTime: 60 * 1000, // 1 minute
+						refetchOnWindowFocus: false,
+					},
+				},
+			})
+	)
+
+	return (
+		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+	)
+}
+```
+
+**Custom Hook Pattern** (`hooks/use-user.ts`):
+
+```typescript
+export function useUser() {
+	const { data: session, isPending: isSessionPending } = useSession()
+
+	const {
+		data: user,
+		isLoading,
+		error,
+	} = useQuery({
+		queryKey: ["user", session?.user?.id],
+		queryFn: async () => {
+			if (!session?.user?.id) return null
+			const response = await fetch(`/api/user/${session.user.id}`)
+			if (!response.ok) throw new Error("Failed to fetch user")
+			return response.json() as Promise<User>
+		},
+		enabled: !!session?.user?.id,
+	})
+
+	return {
+		user: user || (session?.user as User | null),
+		isLoading: isLoading || isSessionPending,
+		error,
+	}
+}
+```
+
+**Usage in Components:**
+
+```typescript
+const { user, isLoading, error } = useUser()
+
+if (isLoading) return <LoadingSkeleton />
+if (error) return <ErrorMessage />
+if (!user) return <NoUserState />
+
+return <UserProfile user={user} />
+```
 
 ### Adding New Server Action
 
@@ -529,10 +639,15 @@ JWT_SECRET=                        # MUST match BETTER_AUTH_SECRET
 - ✅ `components/task/board/task-empty-state.tsx` - Task-specific empty states
 - ✅ `components/task/task-context-menu.tsx` - Task context menu
 - ✅ `hooks/use-keyboard-shortcuts.ts` - Keyboard shortcuts hook
-- ✅ `app/layout.tsx` - Added Toaster component
+- ✅ `app/layout.tsx` - Added Toaster component and QueryProvider
 - ✅ `app/page.tsx` - Integrated command palette
 - ✅ `components/task/header/task-header.tsx` - Added search button with Cmd+K hint
 - ✅ `components/task/board/task-card.tsx` - Wrapped with context menu
+- ✅ `components/query-provider.tsx` - TanStack Query provider
+- ✅ `hooks/use-user.ts` - User profile hook with TanStack Query
+- ✅ `app/api/user/[id]/route.ts` - User profile API endpoint
+- ✅ `components/task/sidebar/nav-user.tsx` - Dynamic user profile component
+- ✅ `app/(dashboard)/settings/page.tsx` - Settings page with user data
 
 **Next Steps (Sprint 2):**
 

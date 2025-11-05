@@ -1,29 +1,19 @@
 "use client"
 
 import {
-	Bell,
-	Circle,
-	Star,
 	House,
 	FileCheck,
 	FileText,
-	Calendar,
-	Users,
-	Building,
-	ChevronDown,
-	Paperclip,
-	Folder,
-	Mail,
-	Layers,
+	MessageSquare,
 	CreditCard,
-	Navigation,
+	Users,
+	Sparkles,
+	UserCog,
+	GitBranch,
 	Search,
-	Check,
-	Plus,
-	LogOut,
+	ChevronDown,
 } from "lucide-react"
-import { signOut } from "@/lib/auth-client"
-import { useRouter, usePathname } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
 	Sidebar,
@@ -31,18 +21,11 @@ import {
 	SidebarFooter,
 	SidebarHeader,
 } from "@/components/ui/sidebar"
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import Image from "next/image"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { NavUser } from "@/components/task/sidebar/nav-user"
 import Link from "next/link"
-import { Kbd } from "@/components/ui/kbd"
 
 interface SidebarItemProps {
 	icon: React.ReactNode
@@ -58,23 +41,23 @@ function SidebarItem({ icon, label, badge, active, href }: SidebarItemProps) {
 			<Button
 				variant="ghost"
 				className={cn(
-					"w-full justify-between px-3 py-2 h-auto text-sm",
+					"w-full justify-start px-3 py-2.5 h-10 text-sm font-normal",
 					active
-						? "bg-muted text-foreground font-medium"
+						? "bg-muted/80 text-foreground"
 						: "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
 				)}
 				asChild
 			>
 				<Link href={href}>
-					<div className="flex items-center gap-3">
-						{icon}
-						<span>{label}</span>
+					<div className="flex items-center gap-3 w-full">
+						<div className="shrink-0">{icon}</div>
+						<span className="flex-1">{label}</span>
+						{badge && (
+							<div className="bg-red-500 text-white text-xs rounded-full size-5 flex items-center justify-center shrink-0">
+								{badge}
+							</div>
+						)}
 					</div>
-					{badge && (
-						<div className="bg-red-500 text-white text-xs rounded-full size-5 flex items-center justify-center">
-							{badge}
-						</div>
-					)}
 				</Link>
 			</Button>
 		)
@@ -84,202 +67,108 @@ function SidebarItem({ icon, label, badge, active, href }: SidebarItemProps) {
 		<Button
 			variant="ghost"
 			className={cn(
-				"w-full justify-between px-3 py-2 h-auto text-sm",
+				"w-full justify-start px-3 py-2.5 h-10 text-sm font-normal",
 				active
-					? "bg-muted text-foreground font-medium"
+					? "bg-muted/80 text-foreground"
 					: "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
 			)}
 		>
-			<div className="flex items-center gap-3">
-				{icon}
-				<span>{label}</span>
+			<div className="flex items-center gap-3 w-full">
+				<div className="shrink-0">{icon}</div>
+				<span className="flex-1">{label}</span>
+				{badge && (
+					<div className="bg-red-500 text-white text-xs rounded-full size-5 flex items-center justify-center shrink-0">
+						{badge}
+					</div>
+				)}
 			</div>
-			{badge && (
-				<div className="bg-red-500 text-white text-xs rounded-full size-5 flex items-center justify-center">
-					{badge}
-				</div>
-			)}
 		</Button>
-	)
-}
-
-function SidebarSection({
-	title,
-	children,
-}: {
-	title: string
-	children: React.ReactNode
-}) {
-	return (
-		<div className="mb-6">
-			<Button
-				variant="ghost"
-				className="gap-2 px-1 mb-2 text-xs h-auto py-0 text-muted-foreground hover:text-foreground"
-			>
-				<span>{title}</span>
-				<ChevronDown className="size-3" />
-			</Button>
-			<div className="space-y-0.5">{children}</div>
-		</div>
 	)
 }
 
 export function TaskSidebar({
 	...props
 }: React.ComponentProps<typeof Sidebar>) {
-	const router = useRouter()
 	const pathname = usePathname()
-
-	const handleLogout = async () => {
-		await signOut()
-		router.push("/login")
-		router.refresh()
-	}
 
 	return (
 		<Sidebar collapsible="offcanvas" {...props}>
-			<SidebarHeader className="pb-0">
-				<div className="px-4 pt-4 pb-0">
-					<div className="flex items-center justify-between">
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button
-									variant="ghost"
-									className="flex items-center gap-3 h-auto p-0! hover:bg-transparent"
-								>
-									<div className="size-6 bg-linear-to-br from-purple-500 to-pink-600 rounded-sm shadow flex items-center justify-center text-white text-xs font-semibold">
-										SU
-									</div>
-									<span className="font-semibold">Square UI</span>
-									<ChevronDown className="size-3 text-muted-foreground" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent className="w-56" align="start">
-								<DropdownMenuItem>
-									<div className="flex items-center gap-3 w-full">
-										<div className="size-6 bg-linear-to-br from-purple-500 to-pink-600 rounded-sm shadow flex items-center justify-center text-white text-xs font-semibold">
-											SU
-										</div>
-										<span className="font-semibold">Square UI</span>
-										<Check className="size-4 ml-auto" />
-									</div>
-								</DropdownMenuItem>
-								<DropdownMenuItem>
-									<div className="flex items-center gap-3 w-full">
-										<div className="size-6 bg-linear-to-br from-blue-500 to-cyan-600 rounded-sm shadow flex items-center justify-center text-white text-xs font-semibold">
-											CI
-										</div>
-										<span>Circle</span>
-									</div>
-								</DropdownMenuItem>
-								<DropdownMenuItem>
-									<div className="flex items-center gap-3 w-full">
-										<div className="size-6 bg-linear-to-br from-orange-500 to-red-600 rounded-sm shadow flex items-center justify-center text-white text-xs font-semibold">
-											LN
-										</div>
-										<span>lndev-ui</span>
-									</div>
-								</DropdownMenuItem>
-								<DropdownMenuSeparator />
-								<DropdownMenuItem>
-									<Plus className="size-4" />
-									<span>Add new team</span>
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
+			<SidebarHeader className="">
+				<div className="px-3 pt-4 border-2 border-border/50 rounded-2xl">
+					<div className="flex items-center gap-3 mb-4">
 						<Image
 							src="/ln.png"
-							alt="lndev.me"
-							className="size-5 object-cover rounded-full"
-							width={20}
-							height={20}
+							alt="Team Avatar"
+							className="size-10 object-cover rounded-lg"
+							width={40}
+							height={40}
 						/>
-					</div>
-
-					{/* Search */}
-					<div className="mt-4 relative">
-						<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-						<Input
-							type="search"
-							placeholder="Search anything"
-							className="pl-8 pr-10 text-xs h-8 bg-background"
-						/>
-						<Kbd className="absolute right-2 top-1/2 -translate-y-1/2">/</Kbd>
+						<div className="flex-1 min-w-0">
+							<p className="text-xs text-muted-foreground">Team</p>
+							<p className="font-semibold truncate">David Visuals</p>
+						</div>
+						<Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+							<ChevronDown className="size-4 text-muted-foreground" />
+						</Button>
 					</div>
 				</div>
 			</SidebarHeader>
 
-			<SidebarContent className="p-4">
-				<div className="space-y-0.5 mb-6">
-					<SidebarItem
-						icon={<Bell className="size-4" />}
-						label="Notifications"
-						badge="12"
-					/>
+			<SidebarContent className="px-3 py-4">
+				<div className="space-y-0.5">
+					<div className="relative">
+						<Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+						<Input
+							type="search"
+							placeholder="Search"
+							className="pl-9 h-9 bg-muted/50 border-0"
+						/>
+					</div>
 					<SidebarItem
 						icon={<House className="size-4" />}
-						label="Dashboard"
+						label="Home"
 						href="/dashboard"
 						active={pathname === "/dashboard"}
 					/>
 					<SidebarItem
-						icon={<Circle className="size-4" />}
-						label="Assigned to me"
-					/>
-					<SidebarItem
 						icon={<FileCheck className="size-4" />}
-						label="Task"
+						label="Tasks"
 						href="/tasks"
 						active={pathname === "/tasks"}
 					/>
+					<SidebarItem icon={<FileText className="size-4" />} label="Docs" />
 					<SidebarItem
-						icon={<FileCheck className="size-4" />}
-						label="Projects"
+						icon={<MessageSquare className="size-4" />}
+						label="Chat"
 					/>
-					<SidebarItem icon={<FileText className="size-4" />} label="Drafts" />
 					<SidebarItem
-						icon={<Calendar className="size-4" />}
-						label="Schedule"
+						icon={<CreditCard className="size-4" />}
+						label="Payments"
 					/>
 					<SidebarItem icon={<Users className="size-4" />} label="Customers" />
 					<SidebarItem
-						icon={<Building className="size-4" />}
-						label="Companies"
+						icon={<Sparkles className="size-4" />}
+						label="Automations"
+					/>
+					<SidebarItem
+						icon={<UserCog className="size-4" />}
+						label="User Management"
+					/>
+					<SidebarItem
+						icon={<GitBranch className="size-4" />}
+						label="Workflows"
 					/>
 				</div>
-
-				<SidebarSection title="Workspace">
-					<SidebarItem
-						icon={<Paperclip className="size-4" />}
-						label="Attachment"
-					/>
-					<SidebarItem icon={<Folder className="size-4" />} label="Documents" />
-					<SidebarItem icon={<Mail className="size-4" />} label="Emails" />
-					<SidebarItem
-						icon={<FileCheck className="size-4" />}
-						label="Projects"
-					/>
-				</SidebarSection>
 			</SidebarContent>
 
-			<SidebarFooter className="p-4 space-y-0.5">
+			<SidebarFooter className="p-3 border-t border-border/50">
 				<SidebarItem
-					icon={<Layers className="size-4" />}
-					label="Sub accounts"
+					icon={<UserCog className="size-4" />}
+					label="Settings"
+					href="/settings"
+					active={pathname === "/settings"}
 				/>
-				<SidebarItem icon={<CreditCard className="size-4" />} label="Billing" />
-				<SidebarItem
-					icon={<Navigation className="size-4" />}
-					label="Availability"
-				/>
-				<Button
-					variant="ghost"
-					onClick={handleLogout}
-					className="w-full justify-start px-3 py-2 h-auto text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-				>
-					<LogOut className="size-4 mr-3" />
-					<span>Logout</span>
-				</Button>
+				<NavUser />
 			</SidebarFooter>
 		</Sidebar>
 	)
