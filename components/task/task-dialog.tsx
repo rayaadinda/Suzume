@@ -38,7 +38,8 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { CalendarIcon, X } from "lucide-react"
+import { CalendarIcon, X, Repeat } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useTasksStore } from "@/store/tasks-store"
@@ -58,6 +59,14 @@ const taskFormSchema = z.object({
 	date: z.string().optional(),
 	assigneeIds: z.array(z.string()),
 	labelIds: z.array(z.string()),
+	// Recurring task fields
+	isRecurring: z.boolean().default(false),
+	recurrencePattern: z
+		.enum(["daily", "weekly", "monthly", "custom"])
+		.optional(),
+	recurrenceInterval: z.number().min(1).max(365).default(1),
+	recurrenceDays: z.array(z.string()).optional(),
+	recurrenceEndDate: z.string().optional(),
 })
 
 type TaskFormValues = z.infer<typeof taskFormSchema>
@@ -94,6 +103,15 @@ export function TaskDialog({
 			date: task?.date || "",
 			assigneeIds: task?.assignees.map((a) => a.id) || [],
 			labelIds: task?.labels.map((l) => l.id) || [],
+			isRecurring: task?.isRecurring || false,
+			recurrencePattern: (task?.recurrencePattern as TaskFormValues["recurrencePattern"]) || undefined,
+			recurrenceInterval: task?.recurrenceInterval || 1,
+			recurrenceDays: task?.recurrenceDays
+				? JSON.parse(task.recurrenceDays)
+				: [],
+			recurrenceEndDate: task?.recurrenceEndDate
+				? format(new Date(task.recurrenceEndDate), "yyyy-MM-dd")
+				: "",
 		},
 	})
 
@@ -124,6 +142,15 @@ export function TaskDialog({
 				date: task?.date || "",
 				assigneeIds: task?.assignees.map((a) => a.id) || [],
 				labelIds: task?.labels.map((l) => l.id) || [],
+				isRecurring: task?.isRecurring || false,
+				recurrencePattern: (task?.recurrencePattern as TaskFormValues["recurrencePattern"]) || undefined,
+				recurrenceInterval: task?.recurrenceInterval || 1,
+				recurrenceDays: task?.recurrenceDays
+					? JSON.parse(task.recurrenceDays)
+					: [],
+				recurrenceEndDate: task?.recurrenceEndDate
+					? format(new Date(task.recurrenceEndDate), "yyyy-MM-dd")
+					: "",
 			})
 		}
 	}, [open, task, defaultStatusId, form])
@@ -325,6 +352,197 @@ export function TaskDialog({
 										Select a due date for this task.
 									</FieldDescription>
 								</Field>
+							</FieldGroup>
+						</FieldSet>
+
+						<FieldSeparator />
+
+						{/* Recurring Settings Section */}
+						<FieldSet>
+							<FieldLegend>Recurring Settings</FieldLegend>
+							<FieldDescription>
+								Configure if this task should repeat on a schedule.
+							</FieldDescription>
+							<FieldGroup>
+								{/* Is Recurring Checkbox */}
+								<Field>
+									<div className="flex items-center space-x-2">
+										<Checkbox
+											id="isRecurring"
+											checked={form.watch("isRecurring")}
+											onCheckedChange={(checked) =>
+												form.setValue("isRecurring", checked as boolean)
+											}
+										/>
+										<div className="grid gap-1.5 leading-none">
+											<FieldLabel
+												htmlFor="isRecurring"
+												className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2"
+											>
+												<Repeat className="size-4" />
+												Make this a recurring task
+											</FieldLabel>
+											<FieldDescription>
+												Task will repeat based on the schedule below
+											</FieldDescription>
+										</div>
+									</div>
+								</Field>
+
+								{/* Recurring Options (only show if isRecurring is true) */}
+								{form.watch("isRecurring") && (
+									<>
+										{/* Recurrence Pattern and Interval */}
+										<div className="grid grid-cols-2 gap-4">
+											<Field>
+												<FieldLabel htmlFor="recurrencePattern">
+													Repeat Every
+												</FieldLabel>
+												<Select
+													value={form.watch("recurrencePattern") || ""}
+													onValueChange={(value) =>
+														form.setValue(
+															"recurrencePattern",
+															value as TaskFormValues["recurrencePattern"]
+														)
+													}
+												>
+													<SelectTrigger id="recurrencePattern">
+														<SelectValue placeholder="Select pattern" />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="daily">Day(s)</SelectItem>
+														<SelectItem value="weekly">Week(s)</SelectItem>
+														<SelectItem value="monthly">Month(s)</SelectItem>
+													</SelectContent>
+												</Select>
+											</Field>
+
+											<Field>
+												<FieldLabel htmlFor="recurrenceInterval">
+													Interval
+												</FieldLabel>
+												<Input
+													id="recurrenceInterval"
+													type="number"
+													min="1"
+													max="365"
+													placeholder="1"
+													value={form.watch("recurrenceInterval")}
+													onChange={(e) =>
+														form.setValue(
+															"recurrenceInterval",
+															parseInt(e.target.value) || 1
+														)
+													}
+												/>
+												<FieldDescription>
+													Repeat every X {form.watch("recurrencePattern") || "period"}(s)
+												</FieldDescription>
+											</Field>
+										</div>
+
+										{/* Recurrence Days (only for weekly) */}
+										{form.watch("recurrencePattern") === "weekly" && (
+											<Field>
+												<FieldLabel>Repeat On</FieldLabel>
+												<FieldDescription>
+													Select which days of the week to repeat
+												</FieldDescription>
+												<div className="flex flex-wrap gap-2">
+													{[
+														{ value: "monday", label: "Mon" },
+														{ value: "tuesday", label: "Tue" },
+														{ value: "wednesday", label: "Wed" },
+														{ value: "thursday", label: "Thu" },
+														{ value: "friday", label: "Fri" },
+														{ value: "saturday", label: "Sat" },
+														{ value: "sunday", label: "Sun" },
+													].map((day) => {
+														const isSelected = (
+															form.watch("recurrenceDays") || []
+														).includes(day.value)
+														return (
+															<Button
+																key={day.value}
+																type="button"
+																variant={isSelected ? "default" : "outline"}
+																size="sm"
+																onClick={() => {
+																	const current =
+																		form.watch("recurrenceDays") || []
+																	if (isSelected) {
+																		form.setValue(
+																			"recurrenceDays",
+																			current.filter((d) => d !== day.value)
+																		)
+																	} else {
+																		form.setValue("recurrenceDays", [
+																			...current,
+																			day.value,
+																		])
+																	}
+																}}
+															>
+																{day.label}
+															</Button>
+														)
+													})}
+												</div>
+											</Field>
+										)}
+
+										{/* Recurrence End Date */}
+										<Field>
+											<FieldLabel htmlFor="recurrenceEndDate">
+												End Date (Optional)
+											</FieldLabel>
+											<Popover>
+												<PopoverTrigger asChild>
+													<Button
+														type="button"
+														variant="outline"
+														className={cn(
+															"w-full justify-start text-left font-normal",
+															!form.watch("recurrenceEndDate") &&
+																"text-muted-foreground"
+														)}
+													>
+														<CalendarIcon className="mr-2 h-4 w-4" />
+														{form.watch("recurrenceEndDate") ? (
+															format(
+																new Date(form.watch("recurrenceEndDate")!),
+																"PPP"
+															)
+														) : (
+															<span>No end date (repeats forever)</span>
+														)}
+													</Button>
+												</PopoverTrigger>
+												<PopoverContent className="w-auto p-0" align="start">
+													<Calendar
+														mode="single"
+														selected={
+															form.watch("recurrenceEndDate")
+																? new Date(form.watch("recurrenceEndDate")!)
+																: undefined
+														}
+														onSelect={(date) => {
+															form.setValue(
+																"recurrenceEndDate",
+																date ? format(date, "yyyy-MM-dd") : ""
+															)
+														}}
+														initialFocus
+													/>
+												</PopoverContent>
+											</Popover>
+											<FieldDescription>
+												When to stop generating recurring tasks
+											</FieldDescription>
+										</Field>
+									</>
+								)}
 							</FieldGroup>
 						</FieldSet>
 

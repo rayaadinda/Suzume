@@ -13,6 +13,7 @@ import {
 	InfoIcon,
 	Hexagon,
 	Stars,
+	Repeat,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -109,9 +110,18 @@ export function TaskCard({ task }: TaskCardProps) {
 							{task.description}
 						</p>
 
-						{/* Labels */}
-						{task.labels.length > 0 && (
+						{/* Labels & Recurring Badge */}
+						{(task.labels.length > 0 || task.isRecurring) && (
 							<div className="flex flex-wrap gap-1.5">
+								{task.isRecurring && (
+									<Badge
+										variant="outline"
+										className="text-[10px] px-1.5 py-0.5 font-medium border-primary/50 text-primary flex items-center gap-1"
+									>
+										<Repeat className="size-2.5" />
+										Recurring
+									</Badge>
+								)}
 								{task.labels.map((label) => (
 									<Badge
 										key={label.id}

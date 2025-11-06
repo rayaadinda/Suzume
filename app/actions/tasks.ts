@@ -28,6 +28,14 @@ export type TaskWithRelations = {
 	progressCompleted: number
 	progressTotal: number
 	priority: string
+	isRecurring: boolean
+	recurrencePattern: string | null
+	recurrenceInterval: number | null
+	recurrenceDays: string | null
+	recurrenceEndDate: Date | null
+	parentRecurringTaskId: string | null
+	timeBlockStart: string | null
+	timeBlockEnd: string | null
 	createdAt: Date
 	updatedAt: Date
 	status: {
@@ -278,6 +286,14 @@ export async function getTasks(filters?: {
 					progressCompleted: result.task.progressCompleted,
 					progressTotal: result.task.progressTotal,
 					priority: result.task.priority,
+					isRecurring: result.task.isRecurring,
+					recurrencePattern: result.task.recurrencePattern,
+					recurrenceInterval: result.task.recurrenceInterval,
+					recurrenceDays: result.task.recurrenceDays,
+					recurrenceEndDate: result.task.recurrenceEndDate,
+					parentRecurringTaskId: result.task.parentRecurringTaskId,
+					timeBlockStart: result.task.timeBlockStart,
+					timeBlockEnd: result.task.timeBlockEnd,
 					createdAt: result.task.createdAt,
 					updatedAt: result.task.updatedAt,
 					status: {
@@ -307,6 +323,11 @@ export async function createTask(data: {
 	assigneeIds?: string[]
 	labelIds?: string[]
 	date?: string
+	isRecurring?: boolean
+	recurrencePattern?: string
+	recurrenceInterval?: number
+	recurrenceDays?: string[]
+	recurrenceEndDate?: string
 }): Promise<TaskWithRelations> {
 	await getCurrentUser() // Ensure authenticated
 
@@ -320,6 +341,15 @@ export async function createTask(data: {
 				statusId: data.statusId,
 				priority: data.priority,
 				date: data.date,
+				isRecurring: data.isRecurring || false,
+				recurrencePattern: data.recurrencePattern,
+				recurrenceInterval: data.recurrenceInterval,
+				recurrenceDays: data.recurrenceDays
+					? JSON.stringify(data.recurrenceDays)
+					: null,
+				recurrenceEndDate: data.recurrenceEndDate
+					? new Date(data.recurrenceEndDate)
+					: null,
 			})
 			.returning()
 
@@ -375,6 +405,13 @@ export async function updateTask(
 		progressTotal: number
 		assigneeIds: string[]
 		labelIds: string[]
+		isRecurring: boolean
+		recurrencePattern: string
+		recurrenceInterval: number
+		recurrenceDays: string[]
+		recurrenceEndDate: string
+		timeBlockStart: string | null
+		timeBlockEnd: string | null
 	}>
 ): Promise<TaskWithRelations> {
 	await getCurrentUser() // Ensure authenticated
@@ -389,6 +426,13 @@ export async function updateTask(
 			date?: string
 			progressCompleted?: number
 			progressTotal?: number
+			isRecurring?: boolean
+			recurrencePattern?: string | null
+			recurrenceInterval?: number | null
+			recurrenceDays?: string | null
+			recurrenceEndDate?: Date | null
+			timeBlockStart?: string | null
+			timeBlockEnd?: string | null
 			updatedAt?: Date
 		} = {}
 		if (updates.title !== undefined) taskUpdates.title = updates.title
@@ -397,6 +441,22 @@ export async function updateTask(
 		if (updates.statusId !== undefined) taskUpdates.statusId = updates.statusId
 		if (updates.priority !== undefined) taskUpdates.priority = updates.priority
 		if (updates.date !== undefined) taskUpdates.date = updates.date
+		if (updates.isRecurring !== undefined)
+			taskUpdates.isRecurring = updates.isRecurring
+		if (updates.recurrencePattern !== undefined)
+			taskUpdates.recurrencePattern = updates.recurrencePattern
+		if (updates.recurrenceInterval !== undefined)
+			taskUpdates.recurrenceInterval = updates.recurrenceInterval
+		if (updates.recurrenceDays !== undefined)
+			taskUpdates.recurrenceDays = JSON.stringify(updates.recurrenceDays)
+		if (updates.recurrenceEndDate !== undefined)
+			taskUpdates.recurrenceEndDate = updates.recurrenceEndDate
+				? new Date(updates.recurrenceEndDate)
+				: null
+		if (updates.timeBlockStart !== undefined)
+			taskUpdates.timeBlockStart = updates.timeBlockStart
+		if (updates.timeBlockEnd !== undefined)
+			taskUpdates.timeBlockEnd = updates.timeBlockEnd
 		if (updates.progressCompleted !== undefined)
 			taskUpdates.progressCompleted = updates.progressCompleted
 		if (updates.progressTotal !== undefined)

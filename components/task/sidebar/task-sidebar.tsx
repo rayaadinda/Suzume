@@ -12,6 +12,7 @@ import {
 	GitBranch,
 	Search,
 	ChevronDown,
+	Calendar,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -135,6 +136,12 @@ export function TaskSidebar({
 						label="Tasks"
 						href="/tasks"
 						active={pathname === "/tasks"}
+					/>
+					<SidebarItem
+						icon={<Calendar className="size-4" />}
+						label="Daily Planning"
+						href="/planning"
+						active={pathname === "/planning"}
 					/>
 					<SidebarItem icon={<FileText className="size-4" />} label="Docs" />
 					<SidebarItem

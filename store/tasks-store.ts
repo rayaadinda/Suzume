@@ -67,6 +67,8 @@ interface TasksState {
       progressTotal: number;
       assigneeIds: string[];
       labelIds: string[];
+      timeBlockStart: string | null;
+      timeBlockEnd: string | null;
     }>
   ) => Promise<void>;
   deleteTaskAction: (taskId: string) => Promise<void>;

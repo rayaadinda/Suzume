@@ -90,6 +90,19 @@ export const tasks = pgTable("tasks", {
 	progressCompleted: integer("progress_completed").notNull().default(0),
 	progressTotal: integer("progress_total").notNull().default(0),
 	priority: text("priority").notNull().default("no-priority"), // 'low', 'medium', 'high', 'urgent', 'no-priority'
+
+	// Recurring task fields
+	isRecurring: boolean("is_recurring").notNull().default(false),
+	recurrencePattern: text("recurrence_pattern"), // 'daily', 'weekly', 'monthly', 'custom'
+	recurrenceInterval: integer("recurrence_interval").default(1), // Every X days/weeks/months
+	recurrenceDays: text("recurrence_days"), // JSON array: ['monday', 'wednesday', 'friday'] for weekly
+	recurrenceEndDate: timestamp("recurrence_end_date"), // When to stop generating
+	parentRecurringTaskId: uuid("parent_recurring_task_id"), // Link to original recurring task
+
+	// Time blocking fields for daily planning
+	timeBlockStart: text("time_block_start"), // e.g., "09:00"
+	timeBlockEnd: text("time_block_end"), // e.g., "10:30"
+
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
