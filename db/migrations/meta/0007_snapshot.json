@@ -1,5 +1,5 @@
 {
-  "id": "fa23bd76-878a-4b10-a762-f8fd3f762029",
+  "id": "1f2d0bb8-7889-4d76-a75c-1467ad9adaf9",
   "prevId": "f6fe77ca-dc27-46ad-bcb6-1513d9762bc0",
   "version": "7",
   "dialect": "postgresql",
@@ -220,13 +220,6 @@
       "name": "note_task_links",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
         "note_id": {
           "name": "note_id",
           "type": "uuid",

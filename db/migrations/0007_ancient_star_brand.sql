@@ -11,7 +11,6 @@ CREATE TABLE "note_folders" (
 );
 --> statement-breakpoint
 CREATE TABLE "note_task_links" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"note_id" uuid NOT NULL,
 	"task_id" uuid NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
