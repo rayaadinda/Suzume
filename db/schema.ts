@@ -153,6 +153,75 @@ export const taskLabels = pgTable(
 )
 
 // ========================================
+// NOTES & DOCUMENTATION TABLES
+// ========================================
+
+export const noteFolders = pgTable("note_folders", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	name: text("name").notNull(),
+	parentId: uuid("parent_id"),
+	userId: uuid("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	color: text("color"),
+	iconEmoji: text("icon_emoji"),
+	displayOrder: integer("display_order").notNull().default(0),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
+export const notes = pgTable("notes", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	title: text("title").notNull(),
+	content: text("content").notNull().default("{}"),
+	plainText: text("plain_text"),
+	folderId: uuid("folder_id").references(() => noteFolders.id, {
+		onDelete: "set null",
+	}),
+	userId: uuid("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	isTemplate: boolean("is_template").notNull().default(false),
+	templateName: text("template_name"),
+	coverImage: text("cover_image"),
+	iconEmoji: text("icon_emoji"),
+	isPinned: boolean("is_pinned").notNull().default(false),
+	isArchived: boolean("is_archived").notNull().default(false),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	lastEditedBy: uuid("last_edited_by").references(() => users.id),
+})
+
+export const noteTaskLinks = pgTable(
+	"note_task_links",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		noteId: uuid("note_id")
+			.notNull()
+			.references(() => notes.id, { onDelete: "cascade" }),
+		taskId: uuid("task_id")
+			.notNull()
+			.references(() => tasks.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		unique: primaryKey({ columns: [table.noteId, table.taskId] }),
+	})
+)
+
+export const noteTemplates = pgTable("note_templates", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	name: text("name").notNull(),
+	description: text("description"),
+	content: text("content").notNull().default("{}"),
+	category: text("category"),
+	iconEmoji: text("icon_emoji"),
+	isSystem: boolean("is_system").notNull().default(false),
+	userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
+// ========================================
 // RELATIONS
 // ========================================
 
@@ -160,6 +229,9 @@ export const usersRelations = relations(users, ({ many }) => ({
 	tasks: many(taskAssignees),
 	sessions: many(sessions),
 	accounts: many(accounts),
+	notes: many(notes),
+	noteFolders: many(noteFolders),
+	noteTemplates: many(noteTemplates),
 }))
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -184,6 +256,7 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
 	assignees: many(taskAssignees),
 	labels: many(taskLabels),
 	subtasks: many(subtasks),
+	noteLinks: many(noteTaskLinks),
 }))
 
 export const statusesRelations = relations(statuses, ({ many }) => ({
@@ -223,6 +296,56 @@ export const subtasksRelations = relations(subtasks, ({ one }) => ({
 	}),
 }))
 
+export const noteFoldersRelations = relations(noteFolders, ({ one, many }) => ({
+	user: one(users, {
+		fields: [noteFolders.userId],
+		references: [users.id],
+	}),
+	parent: one(noteFolders, {
+		fields: [noteFolders.parentId],
+		references: [noteFolders.id],
+		relationName: "folder_parent",
+	}),
+	children: many(noteFolders, {
+		relationName: "folder_parent",
+	}),
+	notes: many(notes),
+}))
+
+export const notesRelations = relations(notes, ({ one, many }) => ({
+	user: one(users, {
+		fields: [notes.userId],
+		references: [users.id],
+	}),
+	folder: one(noteFolders, {
+		fields: [notes.folderId],
+		references: [noteFolders.id],
+	}),
+	lastEditor: one(users, {
+		fields: [notes.lastEditedBy],
+		references: [users.id],
+	}),
+	taskLinks: many(noteTaskLinks),
+}))
+
+export const noteTaskLinksRelations = relations(noteTaskLinks, ({ one }) => ({
+	note: one(notes, {
+		fields: [noteTaskLinks.noteId],
+		references: [notes.id],
+	}),
+	task: one(tasks, {
+		fields: [noteTaskLinks.taskId],
+		references: [tasks.id],
+	}),
+}))
+
+export const noteTemplatesRelations = relations(noteTemplates, ({ one }) => ({
+	user: one(users, {
+		fields: [noteTemplates.userId],
+		references: [users.id],
+	}),
+}))
+
 // ========================================
 // TYPE EXPORTS
 // ========================================
@@ -247,3 +370,22 @@ export type TaskLabel = typeof taskLabels.$inferSelect
 
 export type Subtask = typeof subtasks.$inferSelect
 export type NewSubtask = typeof subtasks.$inferInsert
+
+export type Note = typeof notes.$inferSelect
+export type NewNote = typeof notes.$inferInsert
+
+export type NoteFolder = typeof noteFolders.$inferSelect
+export type NewNoteFolder = typeof noteFolders.$inferInsert
+
+export type NoteTemplate = typeof noteTemplates.$inferSelect
+export type NewNoteTemplate = typeof noteTemplates.$inferInsert
+
+export type NoteTaskLink = typeof noteTaskLinks.$inferSelect
+export type NewNoteTaskLink = typeof noteTaskLinks.$inferInsert
+
+export type NoteWithRelations = Note & {
+	user: User
+	folder?: NoteFolder | null
+	lastEditor?: User | null
+	taskLinks: (NoteTaskLink & { task: Task })[]
+}
