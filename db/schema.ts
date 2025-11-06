@@ -195,7 +195,6 @@ export const notes = pgTable("notes", {
 export const noteTaskLinks = pgTable(
 	"note_task_links",
 	{
-		id: uuid("id").defaultRandom().primaryKey(),
 		noteId: uuid("note_id")
 			.notNull()
 			.references(() => notes.id, { onDelete: "cascade" }),
@@ -205,7 +204,7 @@ export const noteTaskLinks = pgTable(
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => ({
-		unique: primaryKey({ columns: [table.noteId, table.taskId] }),
+		pk: primaryKey({ columns: [table.noteId, table.taskId] }),
 	})
 )
 
