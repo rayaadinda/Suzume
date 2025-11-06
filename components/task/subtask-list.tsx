@@ -36,6 +36,7 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 	// Load subtasks
 	React.useEffect(() => {
 		loadSubtasks()
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [taskId])
 
 	const loadSubtasks = async () => {
@@ -63,7 +64,7 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 			setSubtasks([...subtasks, newSubtask])
 			setNewSubtaskTitle("")
 			toast.success("Subtask added")
-		} catch (error) {
+		} catch {
 			toast.error("Failed to add subtask")
 		}
 	}
@@ -71,10 +72,8 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 	const handleToggleSubtask = async (subtaskId: string) => {
 		try {
 			const updated = await toggleSubtask(subtaskId)
-			setSubtasks(
-				subtasks.map((s) => (s.id === subtaskId ? updated : s))
-			)
-		} catch (error) {
+			setSubtasks(subtasks.map((s) => (s.id === subtaskId ? updated : s)))
+		} catch {
 			toast.error("Failed to toggle subtask")
 		}
 	}
@@ -91,12 +90,10 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 			const updated = await updateSubtask(subtaskId, {
 				title: editTitle.trim(),
 			})
-			setSubtasks(
-				subtasks.map((s) => (s.id === subtaskId ? updated : s))
-			)
+			setSubtasks(subtasks.map((s) => (s.id === subtaskId ? updated : s)))
 			setEditingId(null)
 			toast.success("Subtask updated")
-		} catch (error) {
+		} catch {
 			toast.error("Failed to update subtask")
 		}
 	}
@@ -106,7 +103,7 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 			await deleteSubtask(subtaskId)
 			setSubtasks(subtasks.filter((s) => s.id !== subtaskId))
 			toast.success("Subtask deleted")
-		} catch (error) {
+		} catch {
 			toast.error("Failed to delete subtask")
 		}
 	}
@@ -114,7 +111,8 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 	// Calculate progress
 	const completedCount = subtasks.filter((s) => s.completed).length
 	const totalCount = subtasks.length
-	const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+	const progressPercentage =
+		totalCount > 0 ? (completedCount / totalCount) * 100 : 0
 
 	if (loading) {
 		return (
@@ -172,7 +170,7 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 								{/* Checkbox */}
 								<button
 									onClick={() => handleToggleSubtask(subtask.id)}
-									className="flex-shrink-0"
+									className="shrink-0"
 								>
 									{subtask.completed ? (
 										<CheckCircle2 className="size-5 text-green-500" />
@@ -224,24 +222,31 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 				)}
 
 				{/* Add New Subtask */}
-				<form onSubmit={handleAddSubtask} className="flex gap-2">
+				<div className="flex gap-2">
 					<Input
 						placeholder="Add a subtask..."
 						value={newSubtaskTitle}
 						onChange={(e) => setNewSubtaskTitle(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault()
+								handleAddSubtask(e)
+							}
+						}}
 						className="h-9 text-sm"
 					/>
 					<Button
-						type="submit"
+						type="button"
 						size="sm"
 						variant="outline"
 						className="gap-1"
 						disabled={!newSubtaskTitle.trim()}
+						onClick={handleAddSubtask}
 					>
 						<Plus className="size-4" />
 						Add
 					</Button>
-				</form>
+				</div>
 			</CollapsibleContent>
 		</Collapsible>
 	)
