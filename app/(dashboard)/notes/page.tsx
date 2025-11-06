@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useNotesStore } from "@/store/notes-store"
+import { useState, useMemo, useEffect } from "react"
 import { NoteEditor } from "@/components/notes/note-editor"
 import { NoteList } from "@/components/notes/note-list"
 import { FolderTree } from "@/components/notes/folder-tree"
@@ -13,39 +12,55 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import {
+	useNotes,
+	useSearchNotes,
+	useCreateNote,
+	useUpdateNote,
+} from "@/hooks/use-notes"
+import { useNotesStore } from "@/store/notes-store"
+import type { NoteWithRelations } from "@/db/schema"
 
 export default function NotesPage() {
-	const {
-		notes,
-		currentNote,
-		folders,
-		searchQuery,
-		loading,
-		fetchNotes,
-		fetchFolders,
-		createNoteAction,
-		updateNoteAction,
-		setCurrentNote,
-		searchNotesAction,
-	} = useNotesStore()
-
-	const [noteTitle, setNoteTitle] = useState("")
+	const { folders, fetchFolders } = useNotesStore()
+	const [selectedFolderId] = useState<string | null>(null)
 	const [searchInput, setSearchInput] = useState("")
+	const [isSearching, setIsSearching] = useState(false)
+	const [currentNote, setCurrentNote] = useState<NoteWithRelations | null>(null)
+	const [noteTitle, setNoteTitle] = useState("")
+
+	const { data: notes = [], isLoading: notesLoading } = useNotes(
+		selectedFolderId ?? undefined
+	)
+	const { data: searchResults = [], isLoading: searchLoading } = useSearchNotes(
+		isSearching ? searchInput : ""
+	)
+
+	const createNoteMutation = useCreateNote()
+	const updateNoteMutation = useUpdateNote()
+
+	const displayNotes = useMemo(
+		() => (isSearching ? searchResults : notes),
+		[isSearching, searchResults, notes]
+	)
+
+	const isLoading = isSearching ? searchLoading : notesLoading
 
 	useEffect(() => {
-		fetchNotes()
 		fetchFolders()
-	}, [fetchNotes, fetchFolders])
+	}, [fetchFolders])
 
-	useEffect(() => {
-		if (currentNote) {
-			setNoteTitle(currentNote.title)
-		}
-	}, [currentNote])
+	const handleSelectNote = (note: NoteWithRelations) => {
+		setCurrentNote(note)
+		setNoteTitle(note.title)
+	}
 
 	const handleCreateNote = async () => {
 		try {
-			await createNoteAction({ title: "Untitled Note" })
+			await createNoteMutation.mutateAsync({
+				title: "Untitled Note",
+				folderId: selectedFolderId || undefined,
+			})
 		} catch (error) {
 			console.error("Failed to create note:", error)
 		}
@@ -55,9 +70,12 @@ export default function NotesPage() {
 		if (!currentNote) return
 
 		try {
-			await updateNoteAction(currentNote.id, {
-				content,
-				plainText,
+			updateNoteMutation.mutate({
+				id: currentNote.id,
+				updates: {
+					content,
+					plainText,
+				},
 			})
 		} catch (error) {
 			console.error("Failed to update note:", error)
@@ -68,7 +86,10 @@ export default function NotesPage() {
 		if (!currentNote) return
 
 		try {
-			await updateNoteAction(currentNote.id, { title })
+			updateNoteMutation.mutate({
+				id: currentNote.id,
+				updates: { title },
+			})
 		} catch (error) {
 			console.error("Failed to update title:", error)
 		}
@@ -76,9 +97,9 @@ export default function NotesPage() {
 
 	const handleSearch = () => {
 		if (searchInput.trim()) {
-			searchNotesAction(searchInput)
+			setIsSearching(true)
 		} else {
-			fetchNotes()
+			setIsSearching(false)
 		}
 	}
 
@@ -93,7 +114,12 @@ export default function NotesPage() {
 							placeholder="Search notes..."
 							className="pl-9 w-64"
 							value={searchInput}
-							onChange={(e) => setSearchInput(e.target.value)}
+							onChange={(e) => {
+								setSearchInput(e.target.value)
+								if (!e.target.value.trim()) {
+									setIsSearching(false)
+								}
+							}}
 							onKeyDown={(e) => {
 								if (e.key === "Enter") {
 									handleSearch()
@@ -101,7 +127,10 @@ export default function NotesPage() {
 							}}
 						/>
 					</div>
-					<Button onClick={handleCreateNote}>
+					<Button
+						onClick={handleCreateNote}
+						disabled={createNoteMutation.isPending}
+					>
 						<Plus className="h-4 w-4 mr-2" />
 						New Note
 					</Button>
@@ -117,10 +146,10 @@ export default function NotesPage() {
 
 				<ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
 					<NoteList
-						notes={notes}
+						notes={displayNotes}
 						currentNote={currentNote}
-						onSelectNote={setCurrentNote}
-						loading={loading}
+						onSelectNote={handleSelectNote}
+						loading={isLoading}
 					/>
 				</ResizablePanel>
 

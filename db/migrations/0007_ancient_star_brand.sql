@@ -1,14 +1,4 @@
-CREATE TABLE "note_folders" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"name" text NOT NULL,
-	"parent_id" uuid,
-	"user_id" uuid NOT NULL,
-	"color" text,
-	"icon_emoji" text,
-	"display_order" integer DEFAULT 0 NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
-);
+
 --> statement-breakpoint
 CREATE TABLE "note_task_links" (
 	"note_id" uuid NOT NULL,

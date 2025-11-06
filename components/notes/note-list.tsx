@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { FileText, Pin } from "lucide-react"
 import { format } from "date-fns"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { memo } from "react"
 
 interface NoteListProps {
 	notes: NoteWithRelations[]
@@ -13,7 +14,49 @@ interface NoteListProps {
 	loading: boolean
 }
 
-export function NoteList({
+const NoteItem = memo(
+	({
+		note,
+		isActive,
+		onSelect,
+	}: {
+		note: NoteWithRelations
+		isActive: boolean
+		onSelect: () => void
+	}) => (
+		<button
+			onClick={onSelect}
+			className={cn(
+				"w-full text-left p-3 rounded-lg border transition-colors hover:bg-muted/50",
+				isActive ? "bg-muted border-primary" : "border-transparent"
+			)}
+		>
+			<div className="flex items-start justify-between gap-2">
+				<div className="flex-1 min-w-0">
+					<div className="flex items-center gap-2">
+						{note.iconEmoji && (
+							<span className="text-lg">{note.iconEmoji}</span>
+						)}
+						<h3 className="font-medium truncate text-sm">{note.title}</h3>
+						{note.isPinned && <Pin className="h-3 w-3 text-primary" />}
+					</div>
+					{note.plainText && (
+						<p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+							{note.plainText}
+						</p>
+					)}
+					<p className="text-xs text-muted-foreground mt-2">
+						{format(new Date(note.updatedAt), "MMM d, yyyy")}
+					</p>
+				</div>
+			</div>
+		</button>
+	)
+)
+
+NoteItem.displayName = "NoteItem"
+
+export const NoteList = memo(function NoteList({
 	notes,
 	currentNote,
 	onSelectNote,
@@ -40,42 +83,14 @@ export function NoteList({
 		<ScrollArea className="h-full">
 			<div className="p-4 space-y-2">
 				{notes.map((note) => (
-					<button
+					<NoteItem
 						key={note.id}
-						onClick={() => onSelectNote(note)}
-						className={cn(
-							"w-full text-left p-3 rounded-lg border transition-colors hover:bg-muted/50",
-							currentNote?.id === note.id
-								? "bg-muted border-primary"
-								: "border-transparent"
-						)}
-					>
-						<div className="flex items-start justify-between gap-2">
-							<div className="flex-1 min-w-0">
-								<div className="flex items-center gap-2">
-									{note.iconEmoji && (
-										<span className="text-lg">{note.iconEmoji}</span>
-									)}
-									<h3 className="font-medium truncate text-sm">
-										{note.title}
-									</h3>
-									{note.isPinned && (
-										<Pin className="h-3 w-3 text-primary" />
-									)}
-								</div>
-								{note.plainText && (
-									<p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-										{note.plainText}
-									</p>
-								)}
-								<p className="text-xs text-muted-foreground mt-2">
-									{format(new Date(note.updatedAt), "MMM d, yyyy")}
-								</p>
-							</div>
-						</div>
-					</button>
+						note={note}
+						isActive={currentNote?.id === note.id}
+						onSelect={() => onSelectNote(note)}
+					/>
 				))}
 			</div>
 		</ScrollArea>
 	)
-}
+})

@@ -9,7 +9,7 @@ import Image from "@tiptap/extension-image"
 import Placeholder from "@tiptap/extension-placeholder"
 import { useDebouncedCallback } from "use-debounce"
 import { NoteEditorMenu } from "./note-editor-menu"
-import { useEffect } from "react"
+import { useEffect, memo, useRef } from "react"
 
 interface NoteEditorProps {
 	content: string
@@ -17,12 +17,19 @@ interface NoteEditorProps {
 	placeholder?: string
 }
 
-export function NoteEditor({
+export const NoteEditor = memo(function NoteEditor({
 	content,
 	onUpdate,
 	placeholder,
 }: NoteEditorProps) {
+	const isUpdatingRef = useRef(false)
+
+	const debouncedUpdate = useDebouncedCallback((html: string, text: string) => {
+		onUpdate(html, text)
+	}, 1000)
+
 	const editor = useEditor({
+		immediatelyRender: false,
 		extensions: [
 			StarterKit.configure({
 				heading: {
@@ -56,22 +63,21 @@ export function NoteEditor({
 			},
 		},
 		onUpdate: ({ editor }) => {
-			const html = editor.getHTML()
-			const text = editor.getText()
-			debouncedUpdate(html, text)
+			if (!isUpdatingRef.current) {
+				const html = editor.getHTML()
+				const text = editor.getText()
+				debouncedUpdate(html, text)
+			}
 		},
 	})
 
-	const debouncedUpdate = useDebouncedCallback(
-		(html: string, text: string) => {
-			onUpdate(html, text)
-		},
-		1000
-	)
-
 	useEffect(() => {
 		if (editor && content !== editor.getHTML()) {
+			isUpdatingRef.current = true
 			editor.commands.setContent(content)
+			setTimeout(() => {
+				isUpdatingRef.current = false
+			}, 100)
 		}
 	}, [content, editor])
 
@@ -81,4 +87,4 @@ export function NoteEditor({
 			<EditorContent editor={editor} className="prose-headings:font-bold" />
 		</div>
 	)
-}
+})

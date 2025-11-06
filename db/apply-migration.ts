@@ -12,12 +12,12 @@ const sql = postgres(process.env.DATABASE_URL!, {
 
 async function applyMigration() {
 	try {
-		console.log("Applying migration 0004_purple_marauders.sql...")
+		console.log("Applying migration")
 
 		const migrationPath = path.join(
 			__dirname,
 			"migrations",
-			"0004_purple_marauders.sql"
+			"0007_ancient_star_brand.sql"
 		)
 		const migrationSQL = fs.readFileSync(migrationPath, "utf-8")
 
