@@ -36,6 +36,13 @@
       "when": 1762397129260,
       "tag": "0004_purple_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1762401711124,
+      "tag": "0005_spicy_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

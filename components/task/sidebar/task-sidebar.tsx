@@ -143,7 +143,12 @@ export function TaskSidebar({
 						href="/planning"
 						active={pathname === "/planning"}
 					/>
-					<SidebarItem icon={<FileText className="size-4" />} label="Docs" />
+					<SidebarItem
+					icon={<FileText className="size-4" />}
+					label="Notes"
+					href="/notes"
+					active={pathname === "/notes"}
+				/>
 					<SidebarItem
 						icon={<MessageSquare className="size-4" />}
 						label="Chat"
