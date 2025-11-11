@@ -1,0 +1,1 @@
+ALTER TABLE "task_labels" ALTER COLUMN "label_id" SET DATA TYPE uuid;

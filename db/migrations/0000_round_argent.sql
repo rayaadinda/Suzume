@@ -11,7 +11,7 @@ CREATE TABLE "accounts" (
 );
 --> statement-breakpoint
 CREATE TABLE "labels" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"color" text NOT NULL
 );
@@ -39,7 +39,7 @@ CREATE TABLE "task_assignees" (
 --> statement-breakpoint
 CREATE TABLE "task_labels" (
 	"task_id" uuid NOT NULL,
-	"label_id" text NOT NULL,
+	"label_id" uuid NOT NULL,
 	CONSTRAINT "task_labels_task_id_label_id_pk" PRIMARY KEY("task_id","label_id")
 );
 --> statement-breakpoint

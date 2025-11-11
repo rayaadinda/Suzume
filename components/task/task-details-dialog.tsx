@@ -50,6 +50,7 @@ import type { LabelData } from "@/app/actions/labels"
 import type { StatusData } from "@/app/actions/statuses"
 import { SubtaskList } from "./subtask-list"
 import { PomodoroTimer } from "./pomodoro-timer"
+import { LinkedNotes } from "./linked-notes"
 
 const taskFormSchema = z.object({
 	title: z.string().min(1, "Title is required").max(255),
@@ -440,6 +441,11 @@ export function TaskDetailsDialog({
 
 						{/* Subtasks/Checklist */}
 						<SubtaskList taskId={task.id} />
+
+						<Separator />
+
+						{/* Linked Notes */}
+						<LinkedNotes task={task} />
 
 						<Separator />
 

@@ -10,6 +10,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 DONT EVER ADD COMMENTS LINE THIS IN THE FINAL OUTPUT OF GENERATION!!
 ## 🎉 Recent Updates
 
+**Phase 3: Notes & Documentation Feature** - January 2025
+
+- ✅ **Notes System** - Notion-like note editor with rich text support
+  - TipTap editor with StarterKit, TaskList, Links, Images
+  - Note folders for organization (nested hierarchy)
+  - Note templates for quick starts
+  - Pin/archive functionality
+  - Emoji icons and cover images
+  - Plain text extraction for search
+- ✅ **Note-Task Integration** - Link notes to tasks for context
+  - LinkedNotes component in task details dialog
+  - Add/remove note links via popover
+  - Preview note content inline (title, emoji, excerpt, timestamp)
+  - Open full notes in new tab
+  - TaskWithRelations includes noteLinks array
+  - Server actions: linkNoteToTask, unlinkNoteFromTask
+- ✅ **Notes Page** - Full-featured notes management UI
+  - Folder tree navigation
+  - Note list with search
+  - Rich text editor with formatting toolbar
+  - Auto-save with debouncing
+
 **User Profile Integration with TanStack Query** - January 2025
 
 - ✅ **TanStack Query Setup** - Integrated React Query for server state management
@@ -80,9 +102,240 @@ All features tested and working. See [Project Vision & Feature Roadmap](#project
 
 A **self-hosted task management application** with a Kanban-style interface for managing tasks across 6 status columns. Built with Next.js 16, React 19, TypeScript, Go backend, BetterAuth authentication, Drizzle ORM with Supabase PostgreSQL, and real-time WebSocket updates.
 
-**Frontend Stack**: Next.js 16, React 19, Zustand, TanStack Query, BetterAuth, Drizzle ORM, Radix UI, Tailwind CSS 4, TypeScript 5
+**Frontend Stack**: Next.js 16, React 19, Zustand, TanStack Query, BetterAuth, Drizzle ORM, Radix UI, Tailwind CSS 4, TipTap (notes editor), TypeScript 5
 **Backend Stack**: Go 1.21+, Gin web framework, Gorilla WebSocket, JWT authentication
 **Database**: Supabase PostgreSQL with Drizzle ORM
+
+## Personal-First Architecture
+
+**Design Philosophy**: This application is built with a **personal-first approach** - users get their own isolated workspace by default with NO forced team assignment or collaboration features. It's designed as a personal productivity tool that can optionally support teams in the future.
+
+### Current User Isolation Model
+
+**✅ No Team Assignment on Signup**
+- Users create individual accounts via BetterAuth email/password
+- Each user gets their own isolated task space immediately
+- NO team, workspace, or organization tables in the database
+- NO automatic group assignment or onboarding flows
+
+**Signup Flow (Personal-First)**:
+```
+User Signup (email/password)
+    ↓
+BetterAuth creates user record
+    ↓
+Auto sign-in enabled (7-day session)
+    ↓
+Redirect to /tasks
+    ↓
+Personal task board (user-scoped data only)
+```
+
+### Data Isolation Guarantees
+
+**All data queries are user-scoped**:
+```typescript
+// Example: All tasks filtered by current user
+const tasks = await db.query.tasks.findMany({
+  where: eq(tasks.userId, currentUser.id)
+})
+
+// Example: All server actions check authentication
+export async function getTasks() {
+  const user = await getCurrentUser() // Ensures authentication
+  // Fetch only this user's tasks
+}
+```
+
+**Key isolation points**:
+1. **Database Level**: All queries include `userId` filter
+2. **Server Actions**: All actions call `getCurrentUser()` first
+3. **Middleware**: Validates session before allowing dashboard access
+4. **WebSocket**: Broadcasts are user-scoped (each user sees only their updates)
+5. **No Cross-User Queries**: No mechanism to query other users' data
+
+### Current Database Schema (User-Only)
+
+**Auth Tables**:
+- `users` - Individual user accounts
+- `sessions` - User sessions (JWT tokens)
+- `accounts` - OAuth accounts (future)
+- `verifications` - Email verifications
+
+**User-Scoped Data Tables**:
+- `tasks` (userId column) - Personal tasks only
+- `notes` (userId column) - Personal notes only
+- `labels` (userId column) - Personal labels
+- `subtasks` (via tasks.userId) - Inherited user scope
+- `note_folders` (userId column) - Personal note organization
+
+**NO Team/Workspace Tables**:
+- ❌ No `teams` table
+- ❌ No `workspaces` table
+- ❌ No `team_members` junction table
+- ❌ No `team_invitations` table
+- ❌ No shared resources or permissions
+
+### Authentication & Access Control
+
+**BetterAuth Configuration** (`lib/auth.ts`):
+- Email/password only (no social auth by default)
+- Individual user accounts
+- 7-day session expiration
+- Auto sign-in after registration
+- Direct access to personal dashboard
+
+**Middleware Protection** (`middleware.ts`):
+- Validates user session (not team/workspace)
+- Redirects to personal /tasks page
+- No team routing logic
+- No workspace switching
+
+**User Profile** (`useUser()` hook):
+- Fetches individual user data only
+- No team membership queries
+- No workspace context
+
+### Future Team Architecture (Optional)
+
+When team features are needed, the recommended approach is:
+
+**Option A: Optional Teams (Recommended)**
+```typescript
+// Add to schema.ts (future)
+export const teams = pgTable('teams', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  ownerId: uuid('owner_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+})
+
+export const teamMembers = pgTable('team_members', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  role: text('role').notNull().default('member'), // 'owner', 'admin', 'member'
+  joinedAt: timestamp('joined_at').defaultNow(),
+})
+
+// Update tasks table
+export const tasks = pgTable('tasks', {
+  // ... existing fields ...
+  teamId: uuid('team_id').references(() => teams.id), // nullable - null = personal task
+})
+```
+
+**Implementation Strategy**:
+1. **Keep personal-first**: Users start with NO team
+2. **Optional opt-in**: Users can create/join teams via Settings
+3. **Personal tasks remain**: Tasks without `teamId` are personal
+4. **Team tasks separate**: Tasks with `teamId` are shared within team
+5. **Workspace selector**: UI to switch between "Personal" and team workspaces
+
+**Option B: Personal + Team Workspaces**
+```typescript
+export const workspaces = pgTable('workspaces', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  type: text('type').notNull(), // 'personal' | 'team'
+  ownerId: uuid('owner_id').references(() => users.id),
+})
+
+// Auto-create personal workspace on signup
+await db.insert(workspaces).values({
+  name: `${user.name}'s Workspace`,
+  type: 'personal',
+  ownerId: user.id,
+})
+```
+
+**Key Principles for Future Teams**:
+- ✅ Personal workspace is DEFAULT (no team required)
+- ✅ Teams are OPTIONAL (user-initiated)
+- ✅ No forced onboarding or team selection
+- ✅ Personal tasks remain isolated forever
+- ✅ Clear UI distinction between personal and team spaces
+
+### Why Personal-First Matters
+
+**Benefits**:
+1. **Zero Friction Onboarding** - Signup → Tasks in 2 clicks
+2. **Privacy by Default** - No accidental data sharing
+3. **Simpler Mental Model** - Users understand "my tasks" immediately
+4. **Performance** - No complex team permission queries
+5. **Trust** - Users know their data is isolated
+
+**Use Cases Supported**:
+- ✅ Individual productivity
+- ✅ Personal task management
+- ✅ Private note-taking
+- ✅ Solo project planning
+- ✅ Personal habit tracking
+
+**Not Supported (By Design)**:
+- ❌ Team collaboration (not yet)
+- ❌ Shared tasks/projects
+- ❌ Multi-user workspaces
+- ❌ Role-based permissions
+- ❌ Team invitations
+
+### Validation & Testing
+
+**How to verify personal-first architecture**:
+
+1. **Check database queries**:
+```bash
+grep -r "eq(.*\.userId" frontend/app/actions/
+# Should find userId filters in all queries
+```
+
+2. **Verify no team logic**:
+```bash
+grep -ri "team" frontend/db/schema.ts
+# Should return NO results (except comments)
+```
+
+3. **Test user isolation**:
+```typescript
+// Create User A and User B
+// Create tasks as User A
+// Login as User B
+// Verify User B cannot see User A's tasks
+```
+
+4. **Audit server actions**:
+```typescript
+// All actions should start with:
+const user = await getCurrentUser()
+// Then filter queries by user.id
+```
+
+### Migration Path to Teams
+
+If you decide to add team features later:
+
+**Phase 1: Add Tables** (no breaking changes)
+- Add `teams` and `team_members` tables
+- Add nullable `teamId` to tasks
+- Keep existing personal tasks (teamId = null)
+
+**Phase 2: Add UI** (opt-in only)
+- Add "Create Team" button in Settings
+- Add team selector in sidebar (defaults to "Personal")
+- Show personal tasks when no team selected
+
+**Phase 3: Gradual Rollout**
+- Existing users: No changes (personal-first)
+- New users: Can optionally create team during signup
+- Team features are discoverable, not mandatory
+
+**Phase 4: Advanced Features** (only if needed)
+- Team invitations
+- Role-based permissions
+- Team templates
+- Cross-team task movement
+
+**Critical**: Never force existing personal users into teams. Always preserve personal workspace access.
 
 ## Commands
 
@@ -131,6 +384,7 @@ go mod tidy                   # Install/update dependencies
 │  │  • BetterAuth (email/password auth)                  │  │
 │  │  • Protected routes via middleware                   │  │
 │  │  • TanStack Query (server state management)          │  │
+│  │  • TipTap Editor (notes with rich text)             │  │
 │  │  • Zustand store (client state)                      │  │
 │  │  • Server Actions (Drizzle ORM)                      │  │
 │  │  • WebSocket client (real-time)                      │  │
@@ -278,31 +532,53 @@ app/layout.tsx (Root - QueryProvider, Theme, Toaster)
 
 **Tables:**
 
+**Auth Tables:**
 - `users` - User accounts (auth)
 - `sessions` - Active sessions (auth)
-- `accounts` - OAuth accounts (auth, future)
+- `accounts` - OAuth accounts (auth)
 - `verifications` - Email verifications (auth)
+
+**Task Tables:**
 - `tasks` - Task records
 - `statuses` - Task statuses (6 hardcoded)
 - `labels` - Task labels/categories
+- `subtasks` - Checklist items within tasks
 - `task_assignees` - Many-to-many: tasks ↔ users
 - `task_labels` - Many-to-many: tasks ↔ labels
+
+**Notes Tables:**
+- `notes` - Note documents (TipTap JSON content)
+- `note_folders` - Folder hierarchy for notes
+- `note_task_links` - Many-to-many: notes ↔ tasks
+- `note_templates` - Reusable note templates
 
 **Key Fields:**
 
 - `tasks.statusId` → references `statuses.id` (text: "backlog", "to-do", etc.)
-- Tasks have: title, description, priority, progress, dates, counts
+- Tasks have: title, description, priority, progress, dates, counts, noteLinks
+- `notes.content` - TipTap JSON, `notes.plainText` - searchable text
 - Status workflow order enforced by `displayOrder` field
 
 ### Server Actions (app/actions/)
 
 **tasks.ts:**
 
-- `getTasks(filters?)` - Fetch all tasks with relations, filtering, sorting
+- `getTasks(filters?)` - Fetch all tasks with relations (includes noteLinks), filtering, sorting
 - `createTask(data)` - Create new task + broadcast update
 - `updateTask(id, updates)` - Update task fields + broadcast update
 - `deleteTask(id)` - Delete task + broadcast update
 - `updateTaskStatus(id, statusId)` - Move task to different column + broadcast
+
+**notes.ts:**
+
+- `getNotes(folderId?)` - Fetch notes (with relations)
+- `getNote(id)` - Get single note with task links
+- `createNote(data)` - Create new note
+- `updateNote(id, updates)` - Update note content/metadata
+- `deleteNote(id)` - Delete note
+- `searchNotes(query)` - Full-text search
+- `linkNoteToTask(noteId, taskId)` - Create note-task link
+- `unlinkNoteFromTask(noteId, taskId)` - Remove link
 
 **users.ts:**
 
@@ -370,6 +646,54 @@ app/layout.tsx (Root - QueryProvider, Theme, Toaster)
 - Broadcast endpoint: `POST /api/broadcast` (requires JWT)
 - Server Actions call this after database mutations
 - Message format: `{ type: string, payload: object }`
+
+### Notes & Documentation System
+
+**Rich Text Editor** (`components/notes/note-editor.tsx`):
+
+- TipTap editor with StarterKit, TaskList, Link, Image extensions
+- Auto-save with 1-second debounce
+- Saves both HTML content and plain text for search
+- Toolbar: `components/notes/note-editor-menu.tsx`
+
+**Note-Task Integration** (`components/task/linked-notes.tsx`):
+
+- Link notes to tasks for context/documentation
+- Preview note content in task details dialog
+- Card-based previews with title, emoji, excerpt, timestamp
+- Popover selector for adding note links
+- Actions: `linkNoteToTask()`, `unlinkNoteFromTask()`
+
+**Data Model**:
+
+```typescript
+type Note = {
+  id: string
+  title: string
+  content: string          // TipTap JSON
+  plainText: string | null // For search
+  folderId: string | null
+  iconEmoji: string | null
+  isPinned: boolean
+  isArchived: boolean
+}
+
+type TaskWithRelations = {
+  noteLinks: Array<{
+    noteId: string
+    taskId: string
+    note: Note
+  }>
+}
+```
+
+**Features**:
+- Notion-like editor with rich formatting
+- Folder hierarchy for organization
+- Note templates for quick starts
+- Link notes to tasks for reference
+- Search across all notes (uses plainText)
+- Pin important notes to top
 
 ## Key Development Patterns
 
@@ -726,6 +1050,18 @@ Phase 3 (Productivity Features) - ALL 5 FEATURES COMPLETED:
 - ✅ `components/task/board/task-card.tsx` - Added recurring badge with Repeat icon
 - ✅ `components/task/sidebar/task-sidebar.tsx` - Added Daily Planning navigation link
 
+**Files Added/Modified (Phase 4 - Notes & Documentation Feature):**
+
+- ✅ `db/schema.ts` - Added notes tables (notes, note_folders, note_task_links, note_templates)
+- ✅ `app/actions/tasks.ts` - Updated TaskWithRelations type to include noteLinks array
+- ✅ `app/actions/notes.ts` - Server actions for notes CRUD and task linking
+- ✅ `components/notes/note-editor.tsx` - TipTap rich text editor component
+- ✅ `components/notes/note-editor-menu.tsx` - Editor formatting toolbar
+- ✅ `components/task/linked-notes.tsx` - Note-task integration component (247 lines)
+- ✅ `components/task/task-details-dialog.tsx` - Integrated LinkedNotes component
+
+**Phase 4 Status**: ✅ COMPLETED (Notes feature fully implemented)
+
 ---
 
 #### **Phase 2: Views & Navigation** 📊 ✅ COMPLETED
@@ -837,1932 +1173,30 @@ Phase 3 (Productivity Features) - ALL 5 FEATURES COMPLETED:
       - Quick add input at bottom
     - Integration: Embedded in task details dialog
 
-#### **Phase 4: Knowledge Management** 📝
+#### **Phase 4: Knowledge Management** 📝 ✅ COMPLETED
 
-14. **Notes & Documentation** - Rich text editor with markdown
+14. **Notes & Documentation** ✅ IMPLEMENTED - Rich text editor with TipTap
 
-    - Components: `textarea`, `tabs`
-    - Link notes to tasks, wiki-style internal links
+    - Components: TipTap editor with extensions
+    - Files:
+      - `db/schema.ts` - Added notes, note_folders, note_task_links, note_templates tables
+      - `app/actions/notes.ts` - Server actions (getNotes, createNote, updateNote, deleteNote, searchNotes, linkNoteToTask, unlinkNoteFromTask)
+      - `components/notes/note-editor.tsx` - TipTap rich text editor
+      - `components/notes/note-editor-menu.tsx` - Formatting toolbar
+      - `components/task/linked-notes.tsx` - Note-task integration UI
+    - Features:
+      - Notion-like editor with rich formatting
+      - Note folders for organization
+      - Link notes to tasks (bidirectional)
+      - Preview note content in task details
+      - Search across notes (plainText field)
+      - Auto-save with 1-second debounce
+      - TaskWithRelations includes noteLinks array
+    - Integration: Embedded in task details dialog
 
 ---
 
-## 📝 Implementation Guide: Notes & Documentation Feature
 
-### Feature Overview
-
-**Vision**: Create a Notion-style rich text editor for creating, organizing, and linking notes to tasks. This feature transforms the app into a comprehensive knowledge management system alongside task management.
-
-**Core Features:**
-- 📝 Rich text editor powered by Novel (built on Tiptap)
-- 📂 Folders/notebooks for organization
-- 🔗 Bidirectional linking between notes and tasks
-- 🖼️ Image upload with Supabase Storage
-- 📋 Note templates for common formats
-- 🔍 Full-text search across notes
-- 🌐 Real-time collaborative editing (WebSocket)
-- 💾 Auto-save with debouncing
-- 📱 Markdown export/import
-
-**Tech Stack Rationale:**
-- **Novel Editor**: Modern, extensible, Notion-like editing experience with slash commands
-- **Tiptap**: Headless editor framework with powerful extensions ecosystem
-- **Supabase Storage**: Integrated file storage for images/attachments
-- **PostgreSQL Full-Text Search**: Fast, indexed search across note content
-- **WebSocket**: Real-time collaborative editing (cursor positions, live updates)
-
-### Database Schema
-
-#### 1. Notes Table
-
-```sql
-CREATE TABLE notes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  content JSONB NOT NULL DEFAULT '{}'::jsonb,  -- Tiptap JSON format
-  plain_text TEXT,                              -- For full-text search
-  folder_id UUID REFERENCES note_folders(id) ON DELETE SET NULL,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-  is_template BOOLEAN DEFAULT FALSE,
-  template_name TEXT,                           -- Template identifier
-  cover_image TEXT,                             -- Supabase Storage URL
-  icon_emoji TEXT,                              -- Optional note icon (emoji)
-  is_pinned BOOLEAN DEFAULT FALSE,
-  is_archived BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
-  last_edited_by UUID REFERENCES users(id),
-
-  -- Full-text search
-  search_vector TSVECTOR GENERATED ALWAYS AS (
-    to_tsvector('english', coalesce(title, '') || ' ' || coalesce(plain_text, ''))
-  ) STORED
-);
-
-CREATE INDEX idx_notes_user_id ON notes(user_id);
-CREATE INDEX idx_notes_folder_id ON notes(folder_id);
-CREATE INDEX idx_notes_search ON notes USING GIN(search_vector);
-CREATE INDEX idx_notes_updated_at ON notes(updated_at DESC);
-```
-
-#### 2. Note Folders Table
-
-```sql
-CREATE TABLE note_folders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  parent_id UUID REFERENCES note_folders(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-  color TEXT,                                   -- Folder color (#hex)
-  icon_emoji TEXT,                              -- Folder icon (emoji)
-  display_order INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX idx_folders_user_id ON note_folders(user_id);
-CREATE INDEX idx_folders_parent_id ON note_folders(parent_id);
-```
-
-#### 3. Note-Task Links Table (Many-to-Many)
-
-```sql
-CREATE TABLE note_task_links (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  note_id UUID REFERENCES notes(id) ON DELETE CASCADE NOT NULL,
-  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-
-  UNIQUE(note_id, task_id)
-);
-
-CREATE INDEX idx_note_task_note ON note_task_links(note_id);
-CREATE INDEX idx_note_task_task ON note_task_links(task_id);
-```
-
-#### 4. Note Templates Table
-
-```sql
-CREATE TABLE note_templates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  description TEXT,
-  content JSONB NOT NULL DEFAULT '{}'::jsonb,  -- Tiptap JSON format
-  category TEXT,                                -- e.g., 'meeting', 'project', 'doc'
-  icon_emoji TEXT,
-  is_system BOOLEAN DEFAULT FALSE,             -- Built-in vs user-created
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMP DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX idx_templates_user_id ON note_templates(user_id);
-CREATE INDEX idx_templates_category ON note_templates(category);
-```
-
-#### Drizzle ORM Schema (frontend/db/schema.ts)
-
-```typescript
-import { pgTable, uuid, text, jsonb, boolean, timestamp, integer, index } from 'drizzle-orm/pg-core'
-import { relations, sql } from 'drizzle-orm'
-import { users, tasks } from './schema'
-
-export const notes = pgTable('notes', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  title: text('title').notNull(),
-  content: jsonb('content').notNull().default({}),
-  plainText: text('plain_text'),
-  folderId: uuid('folder_id').references(() => noteFolders.id, { onDelete: 'set null' }),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  isTemplate: boolean('is_template').default(false),
-  templateName: text('template_name'),
-  coverImage: text('cover_image'),
-  iconEmoji: text('icon_emoji'),
-  isPinned: boolean('is_pinned').default(false),
-  isArchived: boolean('is_archived').default(false),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  lastEditedBy: uuid('last_edited_by').references(() => users.id),
-}, (table) => ({
-  userIdx: index('idx_notes_user_id').on(table.userId),
-  folderIdx: index('idx_notes_folder_id').on(table.folderId),
-  updatedIdx: index('idx_notes_updated_at').on(table.updatedAt),
-}))
-
-export const noteFolders = pgTable('note_folders', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  parentId: uuid('parent_id').references((): any => noteFolders.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  color: text('color'),
-  iconEmoji: text('icon_emoji'),
-  displayOrder: integer('display_order').default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  userIdx: index('idx_folders_user_id').on(table.userId),
-  parentIdx: index('idx_folders_parent_id').on(table.parentId),
-}))
-
-export const noteTaskLinks = pgTable('note_task_links', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  noteId: uuid('note_id').references(() => notes.id, { onDelete: 'cascade' }).notNull(),
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  noteIdx: index('idx_note_task_note').on(table.noteId),
-  taskIdx: index('idx_note_task_task').on(table.taskId),
-}))
-
-export const noteTemplates = pgTable('note_templates', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  description: text('description'),
-  content: jsonb('content').notNull().default({}),
-  category: text('category'),
-  iconEmoji: text('icon_emoji'),
-  isSystem: boolean('is_system').default(false),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  userIdx: index('idx_templates_user_id').on(table.userId),
-  categoryIdx: index('idx_templates_category').on(table.category),
-}))
-
-// Relations
-export const notesRelations = relations(notes, ({ one, many }) => ({
-  user: one(users, { fields: [notes.userId], references: [users.id] }),
-  folder: one(noteFolders, { fields: [notes.folderId], references: [noteFolders.id] }),
-  lastEditor: one(users, { fields: [notes.lastEditedBy], references: [users.id] }),
-  taskLinks: many(noteTaskLinks),
-}))
-
-export const noteFoldersRelations = relations(noteFolders, ({ one, many }) => ({
-  user: one(users, { fields: [noteFolders.userId], references: [users.id] }),
-  parent: one(noteFolders, { fields: [noteFolders.parentId], references: [noteFolders.id], relationName: 'folder_parent' }),
-  children: many(noteFolders, { relationName: 'folder_parent' }),
-  notes: many(notes),
-}))
-
-export const noteTaskLinksRelations = relations(noteTaskLinks, ({ one }) => ({
-  note: one(notes, { fields: [noteTaskLinks.noteId], references: [notes.id] }),
-  task: one(tasks, { fields: [noteTaskLinks.taskId], references: [tasks.id] }),
-}))
-
-export const noteTemplatesRelations = relations(noteTemplates, ({ one }) => ({
-  user: one(users, { fields: [noteTemplates.userId], references: [users.id] }),
-}))
-
-// Types
-export type Note = typeof notes.$inferSelect
-export type NoteInsert = typeof notes.$inferInsert
-export type NoteFolder = typeof noteFolders.$inferSelect
-export type NoteTemplate = typeof noteTemplates.$inferSelect
-export type NoteTaskLink = typeof noteTaskLinks.$inferSelect
-
-export type NoteWithRelations = Note & {
-  user: typeof users.$inferSelect
-  folder?: NoteFolder
-  lastEditor?: typeof users.$inferSelect
-  taskLinks: (NoteTaskLink & { task: typeof tasks.$inferSelect })[]
-}
-```
-
-### Dependencies to Install
-
-**Frontend packages:**
-
-```bash
-cd frontend
-
-pnpm add novel@0.5.1
-pnpm add tiptap@2.x
-pnpm add @tiptap/extension-link@2.x
-pnpm add @tiptap/extension-task-list@2.x
-pnpm add @tiptap/extension-task-item@2.x
-pnpm add @tiptap/extension-image@2.x
-pnpm add @tiptap/extension-placeholder@2.x
-pnpm add @supabase/storage-js@2.x
-pnpm add react-dropzone@14.x
-pnpm add use-debounce@10.x
-```
-
-**Supabase Storage Setup:**
-
-```typescript
-// lib/storage.ts
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
-export const notesStorage = supabase.storage.from('notes')
-```
-
-**Environment Variables:**
-
-```env
-# Add to frontend/.env.local
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-```
-
-### File Structure
-
-**Complete list of files to create:**
-
-```
-frontend/
-├── app/(dashboard)/
-│   └── notes/
-│       ├── page.tsx                      # Main notes page (split view)
-│       ├── [id]/
-│       │   └── page.tsx                  # Full-page note editor
-│       └── layout.tsx                    # Notes-specific layout
-│
-├── components/notes/
-│   ├── note-editor.tsx                   # Novel editor wrapper
-│   ├── note-editor-menu.tsx              # Editor toolbar (formatting)
-│   ├── note-list.tsx                     # Notes sidebar list
-│   ├── note-card.tsx                     # Individual note preview
-│   ├── note-header.tsx                   # Title, emoji, cover image
-│   ├── folder-tree.tsx                   # Folder navigation tree
-│   ├── folder-dialog.tsx                 # Create/edit folder
-│   ├── template-selector.tsx             # Template picker dialog
-│   ├── note-search.tsx                   # Full-text search input
-│   ├── task-link-selector.tsx            # Link task to note dialog
-│   ├── image-upload.tsx                  # Drag-drop image upload
-│   └── note-empty-state.tsx              # Empty states
-│
-├── app/actions/
-│   ├── notes.ts                          # Note CRUD actions
-│   ├── note-folders.ts                   # Folder CRUD actions
-│   ├── note-templates.ts                 # Template actions
-│   └── note-search.ts                    # Full-text search action
-│
-├── store/
-│   └── notes-store.ts                    # Zustand store for notes
-│
-├── lib/
-│   ├── storage.ts                        # Supabase Storage client
-│   ├── note-parser.ts                    # Parse [[task:id]] links
-│   └── tiptap-extensions.ts              # Custom Tiptap extensions
-│
-└── hooks/
-    ├── use-note-autosave.ts              # Auto-save hook with debounce
-    └── use-note-search.ts                # Search hook
-```
-
-### Implementation Steps
-
-**Step-by-Step Implementation Guide:**
-
-#### Step 1: Database Schema Setup
-
-```bash
-cd frontend
-
-pnpm db:generate
-pnpm db:push
-```
-
-Add seed data for default templates:
-
-```typescript
-// db/seed.ts - Add to existing seed script
-const defaultTemplates = [
-  {
-    name: 'Blank Note',
-    description: 'Start from scratch',
-    content: {},
-    category: 'general',
-    iconEmoji: '📄',
-    isSystem: true,
-  },
-  {
-    name: 'Meeting Notes',
-    description: 'Structure for meeting notes',
-    content: {
-      type: 'doc',
-      content: [
-        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Meeting Notes' }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '📅 Details' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Date: ' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Attendees: ' }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '📋 Agenda' }] },
-        { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '✅ Action Items' }] },
-        { type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false } }] },
-      ],
-    },
-    category: 'meeting',
-    iconEmoji: '📝',
-    isSystem: true,
-  },
-  {
-    name: 'Project Documentation',
-    description: 'Document project details',
-    content: {
-      type: 'doc',
-      content: [
-        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Project Name' }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '🎯 Overview' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Brief project description...' }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '🎨 Goals' }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '📊 Resources' }] },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '📅 Timeline' }] },
-      ],
-    },
-    category: 'project',
-    iconEmoji: '📦',
-    isSystem: true,
-  },
-]
-
-await db.insert(noteTemplates).values(defaultTemplates)
-```
-
-#### Step 2: Install Dependencies
-
-```bash
-pnpm add novel @tiptap/extension-link @tiptap/extension-task-list @tiptap/extension-task-item @tiptap/extension-image @tiptap/extension-placeholder @supabase/storage-js react-dropzone use-debounce
-```
-
-#### Step 3: Create Server Actions
-
-**app/actions/notes.ts:**
-
-```typescript
-"use server"
-
-import { db } from "@/db"
-import { notes, noteFolders, noteTaskLinks, type Note, type NoteWithRelations } from "@/db/schema"
-import { getCurrentUser } from "./users"
-import { eq, and, desc, ilike, sql } from "drizzle-orm"
-import { revalidatePath } from "next/cache"
-import { broadcastUpdate } from "@/lib/websocket-client"
-
-export async function getNotes(folderId?: string): Promise<NoteWithRelations[]> {
-  const user = await getCurrentUser()
-
-  const query = db.query.notes.findMany({
-    where: and(
-      eq(notes.userId, user.id),
-      eq(notes.isArchived, false),
-      folderId ? eq(notes.folderId, folderId) : undefined
-    ),
-    with: {
-      user: true,
-      folder: true,
-      lastEditor: true,
-      taskLinks: {
-        with: {
-          task: true,
-        },
-      },
-    },
-    orderBy: [desc(notes.isPinned), desc(notes.updatedAt)],
-  })
-
-  return query
-}
-
-export async function getNote(id: string): Promise<NoteWithRelations | null> {
-  const user = await getCurrentUser()
-
-  const note = await db.query.notes.findFirst({
-    where: and(eq(notes.id, id), eq(notes.userId, user.id)),
-    with: {
-      user: true,
-      folder: true,
-      lastEditor: true,
-      taskLinks: {
-        with: {
-          task: true,
-        },
-      },
-    },
-  })
-
-  return note || null
-}
-
-export async function createNote(data: {
-  title: string
-  content?: any
-  folderId?: string
-  templateId?: string
-}): Promise<Note> {
-  const user = await getCurrentUser()
-
-  try {
-    const [note] = await db
-      .insert(notes)
-      .values({
-        title: data.title,
-        content: data.content || {},
-        folderId: data.folderId,
-        userId: user.id,
-        lastEditedBy: user.id,
-      })
-      .returning()
-
-    await broadcastUpdate("note_created", { id: note.id, userId: user.id })
-    revalidatePath("/notes")
-    return note
-  } catch (error) {
-    throw new Error("Failed to create note")
-  }
-}
-
-export async function updateNote(
-  id: string,
-  updates: {
-    title?: string
-    content?: any
-    plainText?: string
-    folderId?: string
-    iconEmoji?: string
-    coverImage?: string
-    isPinned?: boolean
-  }
-): Promise<Note> {
-  const user = await getCurrentUser()
-
-  try {
-    const [updated] = await db
-      .update(notes)
-      .set({
-        ...updates,
-        updatedAt: new Date(),
-        lastEditedBy: user.id,
-      })
-      .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
-      .returning()
-
-    await broadcastUpdate("note_updated", { id, userId: user.id })
-    revalidatePath("/notes")
-    return updated
-  } catch (error) {
-    throw new Error("Failed to update note")
-  }
-}
-
-export async function deleteNote(id: string): Promise<void> {
-  const user = await getCurrentUser()
-
-  try {
-    await db
-      .delete(notes)
-      .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
-
-    await broadcastUpdate("note_deleted", { id, userId: user.id })
-    revalidatePath("/notes")
-  } catch (error) {
-    throw new Error("Failed to delete note")
-  }
-}
-
-export async function searchNotes(query: string): Promise<NoteWithRelations[]> {
-  const user = await getCurrentUser()
-
-  const results = await db.query.notes.findMany({
-    where: and(
-      eq(notes.userId, user.id),
-      eq(notes.isArchived, false),
-      sql`search_vector @@ plainto_tsquery('english', ${query})`
-    ),
-    with: {
-      user: true,
-      folder: true,
-      taskLinks: {
-        with: {
-          task: true,
-        },
-      },
-    },
-    orderBy: [desc(notes.updatedAt)],
-  })
-
-  return results
-}
-
-export async function linkNoteToTask(noteId: string, taskId: string): Promise<void> {
-  const user = await getCurrentUser()
-
-  try {
-    await db.insert(noteTaskLinks).values({
-      noteId,
-      taskId,
-    })
-
-    await broadcastUpdate("note_task_linked", { noteId, taskId, userId: user.id })
-    revalidatePath("/notes")
-  } catch (error) {
-    throw new Error("Failed to link note to task")
-  }
-}
-
-export async function unlinkNoteFromTask(noteId: string, taskId: string): Promise<void> {
-  const user = await getCurrentUser()
-
-  try {
-    await db
-      .delete(noteTaskLinks)
-      .where(and(eq(noteTaskLinks.noteId, noteId), eq(noteTaskLinks.taskId, taskId)))
-
-    await broadcastUpdate("note_task_unlinked", { noteId, taskId, userId: user.id })
-    revalidatePath("/notes")
-  } catch (error) {
-    throw new Error("Failed to unlink note from task")
-  }
-}
-```
-
-**app/actions/note-folders.ts:**
-
-```typescript
-"use server"
-
-import { db } from "@/db"
-import { noteFolders, type NoteFolder } from "@/db/schema"
-import { getCurrentUser } from "./users"
-import { eq, and } from "drizzle-orm"
-import { revalidatePath } from "next/cache"
-
-export async function getFolders(): Promise<NoteFolder[]> {
-  const user = await getCurrentUser()
-
-  return db.query.noteFolders.findMany({
-    where: eq(noteFolders.userId, user.id),
-    orderBy: [noteFolders.displayOrder],
-  })
-}
-
-export async function createFolder(data: {
-  name: string
-  parentId?: string
-  color?: string
-  iconEmoji?: string
-}): Promise<NoteFolder> {
-  const user = await getCurrentUser()
-
-  const [folder] = await db
-    .insert(noteFolders)
-    .values({
-      ...data,
-      userId: user.id,
-    })
-    .returning()
-
-  revalidatePath("/notes")
-  return folder
-}
-
-export async function updateFolder(
-  id: string,
-  updates: {
-    name?: string
-    color?: string
-    iconEmoji?: string
-  }
-): Promise<NoteFolder> {
-  const user = await getCurrentUser()
-
-  const [updated] = await db
-    .update(noteFolders)
-    .set(updates)
-    .where(and(eq(noteFolders.id, id), eq(noteFolders.userId, user.id)))
-    .returning()
-
-  revalidatePath("/notes")
-  return updated
-}
-
-export async function deleteFolder(id: string): Promise<void> {
-  const user = await getCurrentUser()
-
-  await db
-    .delete(noteFolders)
-    .where(and(eq(noteFolders.id, id), eq(noteFolders.userId, user.id)))
-
-  revalidatePath("/notes")
-}
-```
-
-#### Step 4: Build Zustand Store
-
-**store/notes-store.ts:**
-
-```typescript
-import { create } from 'zustand'
-import type { NoteWithRelations, NoteFolder } from '@/db/schema'
-import {
-  getNotes,
-  getNote,
-  createNote,
-  updateNote,
-  deleteNote,
-  searchNotes,
-} from '@/app/actions/notes'
-import { getFolders, createFolder, updateFolder, deleteFolder } from '@/app/actions/note-folders'
-
-interface NotesState {
-  notes: NoteWithRelations[]
-  currentNote: NoteWithRelations | null
-  folders: NoteFolder[]
-  selectedFolderId: string | null
-  searchQuery: string
-  loading: boolean
-  error: string | null
-
-  fetchNotes: (folderId?: string) => Promise<void>
-  fetchNote: (id: string) => Promise<void>
-  createNoteAction: (data: { title: string; content?: any; folderId?: string }) => Promise<void>
-  updateNoteAction: (id: string, updates: any) => Promise<void>
-  deleteNoteAction: (id: string) => Promise<void>
-  searchNotesAction: (query: string) => Promise<void>
-
-  fetchFolders: () => Promise<void>
-  createFolderAction: (data: { name: string; parentId?: string; color?: string }) => Promise<void>
-  updateFolderAction: (id: string, updates: any) => Promise<void>
-  deleteFolderAction: (id: string) => Promise<void>
-
-  setSelectedFolder: (folderId: string | null) => void
-  setCurrentNote: (note: NoteWithRelations | null) => void
-  setSearchQuery: (query: string) => void
-}
-
-export const useNotesStore = create<NotesState>((set, get) => ({
-  notes: [],
-  currentNote: null,
-  folders: [],
-  selectedFolderId: null,
-  searchQuery: '',
-  loading: false,
-  error: null,
-
-  fetchNotes: async (folderId) => {
-    set({ loading: true, error: null })
-    try {
-      const notes = await getNotes(folderId)
-      set({ notes, loading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, loading: false })
-    }
-  },
-
-  fetchNote: async (id) => {
-    set({ loading: true, error: null })
-    try {
-      const note = await getNote(id)
-      set({ currentNote: note, loading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, loading: false })
-    }
-  },
-
-  createNoteAction: async (data) => {
-    set({ loading: true, error: null })
-    try {
-      await createNote(data)
-      await get().fetchNotes(get().selectedFolderId || undefined)
-      set({ loading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, loading: false })
-      throw error
-    }
-  },
-
-  updateNoteAction: async (id, updates) => {
-    try {
-      await updateNote(id, updates)
-      if (get().currentNote?.id === id) {
-        await get().fetchNote(id)
-      }
-      await get().fetchNotes(get().selectedFolderId || undefined)
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  deleteNoteAction: async (id) => {
-    try {
-      await deleteNote(id)
-      await get().fetchNotes(get().selectedFolderId || undefined)
-      if (get().currentNote?.id === id) {
-        set({ currentNote: null })
-      }
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  searchNotesAction: async (query) => {
-    set({ loading: true, error: null, searchQuery: query })
-    try {
-      const notes = await searchNotes(query)
-      set({ notes, loading: false })
-    } catch (error) {
-      set({ error: (error as Error).message, loading: false })
-    }
-  },
-
-  fetchFolders: async () => {
-    try {
-      const folders = await getFolders()
-      set({ folders })
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  createFolderAction: async (data) => {
-    try {
-      await createFolder(data)
-      await get().fetchFolders()
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  updateFolderAction: async (id, updates) => {
-    try {
-      await updateFolder(id, updates)
-      await get().fetchFolders()
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  deleteFolderAction: async (id) => {
-    try {
-      await deleteFolder(id)
-      await get().fetchFolders()
-      if (get().selectedFolderId === id) {
-        set({ selectedFolderId: null })
-        await get().fetchNotes()
-      }
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  setSelectedFolder: (folderId) => {
-    set({ selectedFolderId: folderId })
-    get().fetchNotes(folderId || undefined)
-  },
-
-  setCurrentNote: (note) => set({ currentNote: note }),
-  setSearchQuery: (query) => set({ searchQuery: query }),
-}))
-```
-
-#### Step 5: Build UI Components
-
-**components/notes/note-editor.tsx:**
-
-```typescript
-"use client"
-
-import { useEditor, EditorContent } from "@tiptap/react"
-import StarterKit from "@tiptap/starter-kit"
-import Link from "@tiptap/extension-link"
-import TaskList from "@tiptap/extension-task-list"
-import TaskItem from "@tiptap/extension-task-item"
-import Image from "@tiptap/extension-image"
-import Placeholder from "@tiptap/extension-placeholder"
-import { useDebouncedCallback } from "use-debounce"
-import { NoteEditorMenu } from "./note-editor-menu"
-
-interface NoteEditorProps {
-  content: any
-  onUpdate: (content: any, plainText: string) => void
-  placeholder?: string
-}
-
-export function NoteEditor({ content, onUpdate, placeholder }: NoteEditorProps) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-primary underline',
-        },
-      }),
-      TaskList,
-      TaskItem.configure({
-        nested: true,
-      }),
-      Image.configure({
-        HTMLAttributes: {
-          class: 'rounded-lg max-w-full',
-        },
-      }),
-      Placeholder.configure({
-        placeholder: placeholder || 'Start writing...',
-      }),
-    ],
-    content,
-    editorProps: {
-      attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl focus:outline-none max-w-none px-8 py-4',
-      },
-    },
-    onUpdate: ({ editor }) => {
-      const json = editor.getJSON()
-      const text = editor.getText()
-      debouncedUpdate(json, text)
-    },
-  })
-
-  const debouncedUpdate = useDebouncedCallback((json: any, text: string) => {
-    onUpdate(json, text)
-  }, 1000)
-
-  return (
-    <div className="border rounded-lg">
-      <NoteEditorMenu editor={editor} />
-      <EditorContent editor={editor} />
-    </div>
-  )
-}
-```
-
-**components/notes/note-editor-menu.tsx:**
-
-```typescript
-"use client"
-
-import { type Editor } from "@tiptap/react"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import {
-  Bold,
-  Italic,
-  Strikethrough,
-  Code,
-  Heading1,
-  Heading2,
-  Heading3,
-  List,
-  ListOrdered,
-  CheckSquare,
-  Link as LinkIcon,
-  Image as ImageIcon,
-  Undo,
-  Redo,
-} from "lucide-react"
-
-interface NoteEditorMenuProps {
-  editor: Editor | null
-}
-
-export function NoteEditorMenu({ editor }: NoteEditorMenuProps) {
-  if (!editor) return null
-
-  return (
-    <div className="flex flex-wrap gap-1 p-2 border-b">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={editor.isActive('bold') ? 'bg-muted' : ''}
-      >
-        <Bold className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={editor.isActive('italic') ? 'bg-muted' : ''}
-      >
-        <Italic className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        className={editor.isActive('strike') ? 'bg-muted' : ''}
-      >
-        <Strikethrough className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleCode().run()}
-        className={editor.isActive('code') ? 'bg-muted' : ''}
-      >
-        <Code className="h-4 w-4" />
-      </Button>
-
-      <Separator orientation="vertical" className="h-8" />
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        className={editor.isActive('heading', { level: 1 }) ? 'bg-muted' : ''}
-      >
-        <Heading1 className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={editor.isActive('heading', { level: 2 }) ? 'bg-muted' : ''}
-      >
-        <Heading2 className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        className={editor.isActive('heading', { level: 3 }) ? 'bg-muted' : ''}
-      >
-        <Heading3 className="h-4 w-4" />
-      </Button>
-
-      <Separator orientation="vertical" className="h-8" />
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={editor.isActive('bulletList') ? 'bg-muted' : ''}
-      >
-        <List className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        className={editor.isActive('orderedList') ? 'bg-muted' : ''}
-      >
-        <ListOrdered className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleTaskList().run()}
-        className={editor.isActive('taskList') ? 'bg-muted' : ''}
-      >
-        <CheckSquare className="h-4 w-4" />
-      </Button>
-
-      <Separator orientation="vertical" className="h-8" />
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().undo().run()}
-        disabled={!editor.can().undo()}
-      >
-        <Undo className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().redo().run()}
-        disabled={!editor.can().redo()}
-      >
-        <Redo className="h-4 w-4" />
-      </Button>
-    </div>
-  )
-}
-```
-
-**app/(dashboard)/notes/page.tsx:**
-
-```typescript
-"use client"
-
-import { useEffect, useState } from "react"
-import { useNotesStore } from "@/store/notes-store"
-import { NoteEditor } from "@/components/notes/note-editor"
-import { NoteList } from "@/components/notes/note-list"
-import { FolderTree } from "@/components/notes/folder-tree"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Plus, Search } from "lucide-react"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
-
-export default function NotesPage() {
-  const {
-    notes,
-    currentNote,
-    folders,
-    searchQuery,
-    loading,
-    fetchNotes,
-    fetchFolders,
-    createNoteAction,
-    updateNoteAction,
-    setCurrentNote,
-    searchNotesAction,
-  } = useNotesStore()
-
-  const [noteTitle, setNoteTitle] = useState('')
-
-  useEffect(() => {
-    fetchNotes()
-    fetchFolders()
-  }, [])
-
-  useEffect(() => {
-    if (currentNote) {
-      setNoteTitle(currentNote.title)
-    }
-  }, [currentNote])
-
-  const handleCreateNote = async () => {
-    await createNoteAction({ title: 'Untitled Note' })
-  }
-
-  const handleUpdateNote = async (content: any, plainText: string) => {
-    if (!currentNote) return
-
-    await updateNoteAction(currentNote.id, {
-      content,
-      plainText,
-    })
-  }
-
-  const handleUpdateTitle = async (title: string) => {
-    if (!currentNote) return
-
-    await updateNoteAction(currentNote.id, { title })
-  }
-
-  return (
-    <div className="flex flex-col h-screen">
-      <div className="border-b p-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Notes</h1>
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search notes..."
-              className="pl-9 w-64"
-              value={searchQuery}
-              onChange={(e) => searchNotesAction(e.target.value)}
-            />
-          </div>
-          <Button onClick={handleCreateNote}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Note
-          </Button>
-        </div>
-      </div>
-
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
-        <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-          <FolderTree folders={folders} />
-        </ResizablePanel>
-
-        <ResizableHandle />
-
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
-          <NoteList
-            notes={notes}
-            currentNote={currentNote}
-            onSelectNote={setCurrentNote}
-            loading={loading}
-          />
-        </ResizablePanel>
-
-        <ResizableHandle />
-
-        <ResizablePanel defaultSize={55}>
-          {currentNote ? (
-            <div className="flex flex-col h-full">
-              <div className="border-b p-4">
-                <Input
-                  value={noteTitle}
-                  onChange={(e) => setNoteTitle(e.target.value)}
-                  onBlur={() => handleUpdateTitle(noteTitle)}
-                  className="text-3xl font-bold border-none focus-visible:ring-0 px-0"
-                  placeholder="Untitled"
-                />
-              </div>
-              <div className="flex-1 overflow-auto">
-                <NoteEditor
-                  content={currentNote.content}
-                  onUpdate={handleUpdateNote}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              Select a note to start editing
-            </div>
-          )}
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
-  )
-}
-```
-
-#### Step 6: Add Navigation
-
-**components/task/sidebar/task-sidebar.tsx:**
-
-Add Notes link to sidebar navigation:
-
-```typescript
-// Add to navigation items
-{
-  title: "Notes",
-  url: "/notes",
-  icon: FileText,
-  isActive: pathname === "/notes",
-},
-```
-
-#### Step 7: Implement Auto-save
-
-**hooks/use-note-autosave.ts:**
-
-```typescript
-import { useEffect, useRef } from 'react'
-import { useDebouncedCallback } from 'use-debounce'
-
-export function useNoteAutosave(
-  noteId: string | null,
-  onSave: (content: any, plainText: string) => Promise<void>
-) {
-  const isSavingRef = useRef(false)
-
-  const debouncedSave = useDebouncedCallback(
-    async (content: any, plainText: string) => {
-      if (!noteId || isSavingRef.current) return
-
-      isSavingRef.current = true
-      try {
-        await onSave(content, plainText)
-      } catch (error) {
-        console.error('Auto-save failed:', error)
-      } finally {
-        isSavingRef.current = false
-      }
-    },
-    1000 // 1 second debounce
-  )
-
-  return debouncedSave
-}
-```
-
-#### Step 8: Add WebSocket Real-time Sync
-
-**components/websocket-provider.tsx** (update existing file):
-
-```typescript
-// Add note event listeners
-useEffect(() => {
-  if (!ws || !isAuthenticated) return
-
-  ws.on('note_created', () => {
-    useNotesStore.getState().fetchNotes()
-  })
-
-  ws.on('note_updated', () => {
-    useNotesStore.getState().fetchNotes()
-  })
-
-  ws.on('note_deleted', () => {
-    useNotesStore.getState().fetchNotes()
-  })
-
-  return () => {
-    ws.off('note_created')
-    ws.off('note_updated')
-    ws.off('note_deleted')
-  }
-}, [ws, isAuthenticated])
-```
-
-#### Step 9: Implement Task Linking
-
-**lib/note-parser.ts:**
-
-```typescript
-// Parse [[task:uuid]] syntax in notes
-export function parseTaskLinks(text: string): string[] {
-  const regex = /\[\[task:([a-f0-9-]{36})\]\]/gi
-  const matches = [...text.matchAll(regex)]
-  return matches.map(match => match[1])
-}
-
-export function renderTaskLink(taskId: string, taskTitle: string): string {
-  return `[[task:${taskId}|${taskTitle}]]`
-}
-
-// Custom Tiptap extension for task mentions
-import { Node, mergeAttributes } from '@tiptap/core'
-
-export const TaskMention = Node.create({
-  name: 'taskMention',
-
-  group: 'inline',
-
-  inline: true,
-
-  selectable: false,
-
-  atom: true,
-
-  addAttributes() {
-    return {
-      id: {
-        default: null,
-        parseHTML: element => element.getAttribute('data-task-id'),
-        renderHTML: attributes => {
-          if (!attributes.id) return {}
-          return { 'data-task-id': attributes.id }
-        },
-      },
-      label: {
-        default: null,
-      },
-    }
-  },
-
-  parseHTML() {
-    return [
-      {
-        tag: 'span[data-task-id]',
-      },
-    ]
-  },
-
-  renderHTML({ node, HTMLAttributes }) {
-    return [
-      'span',
-      mergeAttributes(
-        { 'data-type': 'task-mention', class: 'task-mention' },
-        HTMLAttributes
-      ),
-      `@${node.attrs.label}`,
-    ]
-  },
-
-  addNodeView() {
-    return ({ node }) => {
-      const span = document.createElement('span')
-      span.classList.add('task-mention', 'text-primary', 'font-medium', 'cursor-pointer')
-      span.textContent = `@${node.attrs.label}`
-      span.onclick = () => {
-        // Navigate to task
-        window.location.href = `/tasks?id=${node.attrs.id}`
-      }
-      return {
-        dom: span,
-      }
-    }
-  },
-})
-```
-
-#### Step 10: Add Image Upload
-
-**components/notes/image-upload.tsx:**
-
-```typescript
-"use client"
-
-import { useCallback } from "react"
-import { useDropzone } from "react-dropzone"
-import { Upload } from "lucide-react"
-import { notesStorage } from "@/lib/storage"
-import { toast } from "sonner"
-
-interface ImageUploadProps {
-  onImageUploaded: (url: string) => void
-}
-
-export function ImageUpload({ onImageUploaded }: ImageUploadProps) {
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0]
-    if (!file) return
-
-    try {
-      const fileName = `${Date.now()}-${file.name}`
-      const { data, error } = await notesStorage.upload(fileName, file)
-
-      if (error) throw error
-
-      const { data: publicUrl } = notesStorage.getPublicUrl(fileName)
-      onImageUploaded(publicUrl.publicUrl)
-
-      toast.success('Image uploaded successfully')
-    } catch (error) {
-      toast.error('Failed to upload image')
-      console.error(error)
-    }
-  }, [onImageUploaded])
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
-    },
-    maxFiles: 1,
-  })
-
-  return (
-    <div
-      {...getRootProps()}
-      className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-        isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
-      }`}
-    >
-      <input {...getInputProps()} />
-      <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-      {isDragActive ? (
-        <p className="text-sm text-muted-foreground">Drop the image here...</p>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Drag & drop an image here, or click to select
-        </p>
-      )}
-    </div>
-  )
-}
-```
-
-**Update note-editor.tsx to support image upload:**
-
-```typescript
-// Add to NoteEditorMenu component
-const handleImageUpload = () => {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = 'image/*'
-  input.onchange = async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (!file) return
-
-    const fileName = `${Date.now()}-${file.name}`
-    const { data, error } = await notesStorage.upload(fileName, file)
-
-    if (error) {
-      toast.error('Failed to upload image')
-      return
-    }
-
-    const { data: publicUrl } = notesStorage.getPublicUrl(fileName)
-    editor?.chain().focus().setImage({ src: publicUrl.publicUrl }).run()
-    toast.success('Image inserted')
-  }
-  input.click()
-}
-
-// Add button to menu
-<Button
-  variant="ghost"
-  size="sm"
-  onClick={handleImageUpload}
->
-  <ImageIcon className="h-4 w-4" />
-</Button>
-```
-
-#### Step 11: Create Templates System
-
-**components/notes/template-selector.tsx:**
-
-```typescript
-"use client"
-
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { getTemplates } from "@/app/actions/note-templates"
-import type { NoteTemplate } from "@/db/schema"
-
-interface TemplateSelectorProps {
-  open: boolean
-  onClose: () => void
-  onSelectTemplate: (template: NoteTemplate) => void
-}
-
-export function TemplateSelector({ open, onClose, onSelectTemplate }: TemplateSelectorProps) {
-  const [templates, setTemplates] = useState<NoteTemplate[]>([])
-  const [search, setSearch] = useState('')
-
-  useEffect(() => {
-    if (open) {
-      getTemplates().then(setTemplates)
-    }
-  }, [open])
-
-  const filteredTemplates = templates.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase())
-  )
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Choose a template</DialogTitle>
-        </DialogHeader>
-
-        <Input
-          placeholder="Search templates..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="mb-4"
-        />
-
-        <div className="grid grid-cols-2 gap-4">
-          {filteredTemplates.map((template) => (
-            <Button
-              key={template.id}
-              variant="outline"
-              className="h-auto p-4 flex flex-col items-start"
-              onClick={() => {
-                onSelectTemplate(template)
-                onClose()
-              }}
-            >
-              <div className="text-2xl mb-2">{template.iconEmoji}</div>
-              <div className="font-semibold text-left">{template.name}</div>
-              {template.description && (
-                <div className="text-xs text-muted-foreground text-left mt-1">
-                  {template.description}
-                </div>
-              )}
-            </Button>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-```
-
-**app/actions/note-templates.ts:**
-
-```typescript
-"use server"
-
-import { db } from "@/db"
-import { noteTemplates, type NoteTemplate } from "@/db/schema"
-import { getCurrentUser } from "./users"
-import { eq, or } from "drizzle-orm"
-
-export async function getTemplates(): Promise<NoteTemplate[]> {
-  const user = await getCurrentUser()
-
-  return db.query.noteTemplates.findMany({
-    where: or(
-      eq(noteTemplates.isSystem, true),
-      eq(noteTemplates.userId, user.id)
-    ),
-    orderBy: [noteTemplates.category, noteTemplates.name],
-  })
-}
-
-export async function createTemplate(data: {
-  name: string
-  description?: string
-  content: any
-  category?: string
-  iconEmoji?: string
-}): Promise<NoteTemplate> {
-  const user = await getCurrentUser()
-
-  const [template] = await db
-    .insert(noteTemplates)
-    .values({
-      ...data,
-      userId: user.id,
-    })
-    .returning()
-
-  return template
-}
-```
-
-#### Step 12: Add Folders/Notebooks
-
-**components/notes/folder-tree.tsx:**
-
-```typescript
-"use client"
-
-import { useState } from "react"
-import { ChevronRight, ChevronDown, Folder, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useNotesStore } from "@/store/notes-store"
-import type { NoteFolder } from "@/db/schema"
-import { FolderDialog } from "./folder-dialog"
-
-export function FolderTree({ folders }: { folders: NoteFolder[] }) {
-  const { selectedFolderId, setSelectedFolder } = useNotesStore()
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [showFolderDialog, setShowFolderDialog] = useState(false)
-
-  const toggleFolder = (id: string) => {
-    const newExpanded = new Set(expandedFolders)
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id)
-    } else {
-      newExpanded.add(id)
-    }
-    setExpandedFolders(newExpanded)
-  }
-
-  const renderFolder = (folder: NoteFolder, level: number = 0) => {
-    const children = folders.filter(f => f.parentId === folder.id)
-    const hasChildren = children.length > 0
-    const isExpanded = expandedFolders.has(folder.id)
-    const isSelected = selectedFolderId === folder.id
-
-    return (
-      <div key={folder.id}>
-        <div
-          className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted ${
-            isSelected ? 'bg-muted' : ''
-          }`}
-          style={{ paddingLeft: `${level * 16 + 8}px` }}
-          onClick={() => setSelectedFolder(folder.id)}
-        >
-          {hasChildren && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleFolder(folder.id)
-              }}
-              className="p-0.5 hover:bg-muted-foreground/10 rounded"
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-            </button>
-          )}
-          <span className="text-lg">{folder.iconEmoji || '📁'}</span>
-          <span className="text-sm flex-1">{folder.name}</span>
-        </div>
-
-        {hasChildren && isExpanded && (
-          <div>
-            {children.map(child => renderFolder(child, level + 1))}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const rootFolders = folders.filter(f => !f.parentId)
-
-  return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold">Folders</h2>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setShowFolderDialog(true)}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div
-        className={`px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted mb-2 ${
-          !selectedFolderId ? 'bg-muted' : ''
-        }`}
-        onClick={() => setSelectedFolder(null)}
-      >
-        <div className="flex items-center gap-2">
-          <Folder className="h-4 w-4" />
-          <span className="text-sm">All Notes</span>
-        </div>
-      </div>
-
-      {rootFolders.map(folder => renderFolder(folder))}
-
-      <FolderDialog
-        open={showFolderDialog}
-        onClose={() => setShowFolderDialog(false)}
-      />
-    </div>
-  )
-}
-```
-
-**components/notes/folder-dialog.tsx:**
-
-```typescript
-"use client"
-
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useNotesStore } from "@/store/notes-store"
-import { toast } from "sonner"
-
-interface FolderDialogProps {
-  open: boolean
-  onClose: () => void
-  folderId?: string
-}
-
-export function FolderDialog({ open, onClose, folderId }: FolderDialogProps) {
-  const { createFolderAction, updateFolderAction } = useNotesStore()
-  const [name, setName] = useState('')
-  const [emoji, setEmoji] = useState('📁')
-
-  const handleSubmit = async () => {
-    try {
-      if (folderId) {
-        await updateFolderAction(folderId, { name, iconEmoji: emoji })
-        toast.success('Folder updated')
-      } else {
-        await createFolderAction({ name, iconEmoji: emoji })
-        toast.success('Folder created')
-      }
-      setName('')
-      setEmoji('📁')
-      onClose()
-    } catch (error) {
-      toast.error('Failed to save folder')
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{folderId ? 'Edit' : 'Create'} Folder</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div>
-            <Label>Emoji</Label>
-            <Input
-              value={emoji}
-              onChange={(e) => setEmoji(e.target.value)}
-              placeholder="📁"
-              maxLength={2}
-            />
-          </div>
-
-          <div>
-            <Label>Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Folder name"
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!name}>
-            {folderId ? 'Update' : 'Create'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-```
-
-### Integration Points
-
-#### 1. Sidebar Navigation
-
-Add Notes link in `components/task/sidebar/task-sidebar.tsx`:
-
-```typescript
-import { FileText } from "lucide-react"
-
-// Add to navItems array
-{
-  title: "Notes",
-  url: "/notes",
-  icon: FileText,
-  isActive: pathname === "/notes",
-},
-```
-
-#### 2. Task Dialog - Link Notes
-
-Add "Linked Notes" section in `components/task/task-dialog.tsx`:
-
-```typescript
-import { TaskLinkSelector } from "@/components/notes/task-link-selector"
-
-// Add section in dialog
-<div className="space-y-2">
-  <Label>Linked Notes</Label>
-  <TaskLinkSelector taskId={task?.id} />
-</div>
-```
-
-#### 3. Command Palette - Create Note
-
-Add to `components/command-palette.tsx`:
-
-```typescript
-// Add to command items
-{
-  icon: FileText,
-  label: 'Create Note',
-  shortcut: ['n'],
-  action: () => {
-    router.push('/notes')
-    useNotesStore.getState().createNoteAction({ title: 'Untitled Note' })
-  },
-},
-```
-
-#### 4. WebSocket Message Types
-
-Update `backend/internal/websocket/hub.go` to handle note events:
-
-```go
-// Add message types
-const (
-  MessageTypeNoteCreated    = "note_created"
-  MessageTypeNoteUpdated    = "note_updated"
-  MessageTypeNoteDeleted    = "note_deleted"
-  MessageTypeNoteTaskLinked = "note_task_linked"
-)
-```
-
-#### 5. Route Structure Update
-
-```
-app/(dashboard)/
-├── notes/
-│   ├── page.tsx              # Main notes page (3-panel layout)
-│   └── [id]/
-│       └── page.tsx          # Full-screen note editor
-```
-
-### Future Enhancements Roadmap
-
-#### Phase 1: Core Improvements
-- **Slash Commands**: Type `/` to insert blocks (heading, list, table, etc.)
-- **Markdown Import/Export**: Convert between Tiptap JSON and Markdown
-- **Note History**: Version control with diff viewer
-- **Duplicate Note**: Quick copy of existing notes
-
-#### Phase 2: Collaboration
-- **Real-time Collaborative Editing**: See other users' cursors and edits
-- **Comments on Notes**: Thread discussions on specific blocks
-- **Note Sharing**: Share notes with specific users or public links
-- **Permissions**: View-only, edit, or admin access per note
-
-#### Phase 3: Advanced Features
-- **Note Embed in Tasks**: Preview note content in task details
-- **Table of Contents**: Auto-generated TOC for long notes
-- **Note Templates Gallery**: Community-submitted templates
-- **AI Assistant**: Summarize notes, generate content, fix grammar
-
-#### Phase 4: Power User Features
-- **Backlinks**: See all notes that link to current note
-- **Graph View**: Visualize connections between notes
-- **Advanced Search**: Filter by tags, date, folder, linked tasks
-- **Keyboard Navigation**: Vim mode, keyboard-only editing
-
-#### Phase 5: Integrations
-- **Import from Notion**: One-click import Notion pages
-- **Export to PDF**: Professional PDF generation
-- **Webhook Integration**: Trigger actions on note events
-- **API Endpoints**: RESTful API for external integrations
-
----
-
-## Implementation Checklist
-
-Use this checklist when implementing the Notes & Documentation feature:
-
-### Database & Backend
-- [ ] Add Drizzle schema for notes, folders, templates, links
-- [ ] Generate and apply database migration
-- [ ] Add seed data for default templates
-- [ ] Create server actions for notes CRUD
-- [ ] Create server actions for folders CRUD
-- [ ] Create server actions for templates
-- [ ] Implement full-text search action
-- [ ] Add WebSocket broadcast for note events
-
-### State Management
-- [ ] Create Zustand notes store
-- [ ] Implement note CRUD actions in store
-- [ ] Implement folder management in store
-- [ ] Add search functionality to store
-- [ ] Integrate with WebSocket provider
-
-### UI Components
-- [ ] Install Novel, Tiptap, and dependencies
-- [ ] Create NoteEditor component
-- [ ] Create NoteEditorMenu toolbar
-- [ ] Create NoteList sidebar component
-- [ ] Create FolderTree navigation
-- [ ] Create TemplateSelector dialog
-- [ ] Create ImageUpload component
-- [ ] Create TaskLinkSelector component
-- [ ] Create empty states for notes
-
-### Pages & Routes
-- [ ] Create `/notes` page with 3-panel layout
-- [ ] Add Notes link to sidebar navigation
-- [ ] Add "Create Note" to command palette
-- [ ] Implement resizable panels
-- [ ] Add note search in header
-
-### Features
-- [ ] Implement auto-save with debouncing
-- [ ] Add image upload with Supabase Storage
-- [ ] Implement task linking (bidirectional)
-- [ ] Add folder organization
-- [ ] Implement note templates
-- [ ] Add full-text search
-- [ ] Real-time collaborative updates
-
-### Polish & Testing
-- [ ] Test note creation/editing/deletion
-- [ ] Test folder organization
-- [ ] Test search functionality
-- [ ] Test task linking
-- [ ] Test image uploads
-- [ ] Test real-time sync across clients
-- [ ] Test auto-save behavior
-- [ ] Add loading states
-- [ ] Add error handling
-- [ ] Add keyboard shortcuts
-
----
 
 15. **File Attachments** - Upload files to tasks
 

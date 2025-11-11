@@ -14,7 +14,7 @@ export type UserData = {
 }
 
 // Helper function to get current user session
-async function getCurrentUser() {
+export async function getCurrentUser() {
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	})

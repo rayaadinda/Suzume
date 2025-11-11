@@ -71,9 +71,13 @@ export const statuses = pgTable("statuses", {
 })
 
 export const labels = pgTable("labels", {
-	id: text("id").primaryKey(), // 'design', 'marketing', etc.
+	id: uuid("id").defaultRandom().primaryKey(),
 	name: text("name").notNull(),
 	color: text("color").notNull(),
+	userId: uuid("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
 export const tasks = pgTable("tasks", {
@@ -83,6 +87,9 @@ export const tasks = pgTable("tasks", {
 	statusId: text("status_id")
 		.notNull()
 		.references(() => statuses.id),
+	userId: uuid("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
 	date: text("date"), // Date string like "Feb 10"
 	commentsCount: integer("comments_count").notNull().default(0),
 	attachmentsCount: integer("attachments_count").notNull().default(0),
@@ -143,7 +150,7 @@ export const taskLabels = pgTable(
 		taskId: uuid("task_id")
 			.notNull()
 			.references(() => tasks.id, { onDelete: "cascade" }),
-		labelId: text("label_id")
+		labelId: uuid("label_id")
 			.notNull()
 			.references(() => labels.id, { onDelete: "cascade" }),
 	},
@@ -151,6 +158,30 @@ export const taskLabels = pgTable(
 		pk: primaryKey({ columns: [table.taskId, table.labelId] }),
 	})
 )
+
+// ========================================
+// JOB APPLICATION TRACKER TABLES
+// ========================================
+
+export const jobApplications = pgTable("job_applications", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	userId: uuid("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	company: text("company").notNull(),
+	position: text("position").notNull(),
+	status: text("status").notNull().default("applied"),
+	appliedDate: timestamp("applied_date").notNull().defaultNow(),
+	salary: text("salary"),
+	location: text("location"),
+	jobUrl: text("job_url"),
+	notes: text("notes").default(""),
+	contactEmail: text("contact_email"),
+	contactPhone: text("contact_phone"),
+	interviewDate: timestamp("interview_date"),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
 
 // ========================================
 // NOTES & DOCUMENTATION TABLES
@@ -231,6 +262,7 @@ export const usersRelations = relations(users, ({ many }) => ({
 	notes: many(notes),
 	noteFolders: many(noteFolders),
 	noteTemplates: many(noteTemplates),
+	jobApplications: many(jobApplications),
 }))
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -345,6 +377,13 @@ export const noteTemplatesRelations = relations(noteTemplates, ({ one }) => ({
 	}),
 }))
 
+export const jobApplicationsRelations = relations(jobApplications, ({ one }) => ({
+	user: one(users, {
+		fields: [jobApplications.userId],
+		references: [users.id],
+	}),
+}))
+
 // ========================================
 // TYPE EXPORTS
 // ========================================
@@ -387,4 +426,11 @@ export type NoteWithRelations = Note & {
 	folder?: NoteFolder | null
 	lastEditor?: User | null
 	taskLinks: (NoteTaskLink & { task: Task })[]
+}
+
+export type JobApplication = typeof jobApplications.$inferSelect
+export type NewJobApplication = typeof jobApplications.$inferInsert
+
+export type JobApplicationWithRelations = JobApplication & {
+	user: User
 }

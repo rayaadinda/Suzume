@@ -10,6 +10,7 @@ import { ViewModeSwitcher } from "./view-mode-switcher"
 import { AdvancedFilters } from "./advanced-filters"
 import { QuickCapture } from "../quick-capture"
 import { PomodoroTimer } from "../pomodoro-timer"
+import { LabelManager } from "../label-manager"
 
 interface TaskHeaderProps {
 	onOpenCommandPalette?: () => void
@@ -47,6 +48,7 @@ export function TaskHeader({}: TaskHeaderProps = {}) {
 				<div className="flex items-center gap-2">
 					<PomodoroTimer compact />
 					<QuickCapture />
+					<LabelManager />
 					<AdvancedFilters />
 					<TaskFilters />
 					<TaskSort />

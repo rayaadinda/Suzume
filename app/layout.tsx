@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-	title: "Task Management",
+	title: "Suzume",
 	description: "Simple board interface for managing tasks",
 }
 

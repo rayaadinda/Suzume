@@ -118,6 +118,14 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground;
+		@apply bg-background text-foreground font-sans;
+		font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+	}
+	code,
+	pre,
+	kbd,
+	samp {
+		font-family: var(--font-geist-mono), ui-monospace, "Cascadia Code",
+			"Source Code Pro", monospace;
 	}
 }

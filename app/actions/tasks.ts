@@ -8,6 +8,8 @@ import {
 	statuses,
 	users,
 	labels,
+	noteTaskLinks,
+	notes,
 } from "@/db/schema"
 import { eq, and, inArray, desc, asc, or, ilike } from "drizzle-orm"
 import { auth } from "@/lib/auth"
@@ -54,6 +56,18 @@ export type TaskWithRelations = {
 		id: string
 		name: string
 		color: string
+	}>
+	noteLinks: Array<{
+		noteId: string
+		taskId: string
+		note: {
+			id: string
+			title: string
+			content: string
+			plainText: string | null
+			iconEmoji: string | null
+			updatedAt: Date
+		}
 	}>
 }
 
@@ -143,11 +157,12 @@ export async function getTasks(filters?: {
 	dateTo?: string
 	sortBy?: "status" | "priority" | "date" | "alphabetical"
 }): Promise<TaskWithRelations[]> {
-	await getCurrentUser() // Ensure authenticated
+	const user = await getCurrentUser() // Ensure authenticated
 
 	try {
-		// Build where conditions
-		const conditions = []
+		// Build where conditions - ALWAYS filter by userId for security
+		const conditions = [eq(tasks.userId, user.id)]
+
 		if (filters?.statusId) {
 			conditions.push(eq(tasks.statusId, filters.statusId))
 		}
@@ -227,6 +242,16 @@ export async function getTasks(filters?: {
 			.leftJoin(labels, eq(taskLabels.labelId, labels.id))
 			.where(inArray(taskLabels.taskId, taskIds))
 
+		// Get note links for all tasks
+		const taskNoteLinksData = await db
+			.select({
+				noteLink: noteTaskLinks,
+				note: notes,
+			})
+			.from(noteTaskLinks)
+			.leftJoin(notes, eq(noteTaskLinks.noteId, notes.id))
+			.where(inArray(noteTaskLinks.taskId, taskIds))
+
 		// Filter by assignee if needed
 		let filteredTaskIds = taskIds
 		if (filters?.assigneeId && filters.assigneeId !== "all") {
@@ -274,6 +299,21 @@ export async function getTasks(filters?: {
 						color: tl.label!.color,
 					}))
 
+				const taskNoteLinksList = taskNoteLinksData
+					.filter((tnl) => tnl.noteLink.taskId === result.task.id && tnl.note)
+					.map((tnl) => ({
+						noteId: tnl.noteLink.noteId,
+						taskId: tnl.noteLink.taskId,
+						note: {
+							id: tnl.note!.id,
+							title: tnl.note!.title,
+							content: tnl.note!.content,
+							plainText: tnl.note!.plainText,
+							iconEmoji: tnl.note!.iconEmoji,
+							updatedAt: tnl.note!.updatedAt,
+						},
+					}))
+
 				return {
 					id: result.task.id,
 					title: result.task.title,
@@ -304,6 +344,7 @@ export async function getTasks(filters?: {
 					},
 					assignees: taskAssigneesList,
 					labels: taskLabelsList,
+					noteLinks: taskNoteLinksList,
 				}
 			})
 
@@ -329,16 +370,17 @@ export async function createTask(data: {
 	recurrenceDays?: string[]
 	recurrenceEndDate?: string
 }): Promise<TaskWithRelations> {
-	await getCurrentUser() // Ensure authenticated
+	const user = await getCurrentUser() // Ensure authenticated
 
 	try {
-		// Insert the task
+		// Insert the task with userId for ownership
 		const [newTask] = await db
 			.insert(tasks)
 			.values({
 				title: data.title,
 				description: data.description,
 				statusId: data.statusId,
+				userId: user.id,
 				priority: data.priority,
 				date: data.date,
 				isRecurring: data.isRecurring || false,
@@ -414,7 +456,7 @@ export async function updateTask(
 		timeBlockEnd: string | null
 	}>
 ): Promise<TaskWithRelations> {
-	await getCurrentUser() // Ensure authenticated
+	const user = await getCurrentUser() // Ensure authenticated
 
 	try {
 		// Update the task
@@ -464,7 +506,8 @@ export async function updateTask(
 
 		if (Object.keys(taskUpdates).length > 0) {
 			taskUpdates.updatedAt = new Date()
-			await db.update(tasks).set(taskUpdates).where(eq(tasks.id, taskId))
+			// Only update tasks owned by this user
+			await db.update(tasks).set(taskUpdates).where(and(eq(tasks.id, taskId), eq(tasks.userId, user.id)))
 		}
 
 		// Update assignees if provided
@@ -517,16 +560,17 @@ export async function updateTaskStatus(
 	taskId: string,
 	newStatusId: string
 ): Promise<TaskWithRelations> {
-	await getCurrentUser()
+	const user = await getCurrentUser()
 
 	try {
+		// Only update tasks owned by this user
 		await db
 			.update(tasks)
 			.set({
 				statusId: newStatusId,
 				updatedAt: new Date(),
 			})
-			.where(eq(tasks.id, taskId))
+			.where(and(eq(tasks.id, taskId), eq(tasks.userId, user.id)))
 
 		const allTasks = await getTasks()
 		const updatedTask = allTasks.find((t) => t.id === taskId)
@@ -549,10 +593,11 @@ export async function updateTaskStatus(
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
-	await getCurrentUser()
+	const user = await getCurrentUser()
 
 	try {
-		await db.delete(tasks).where(eq(tasks.id, taskId))
+		// Only delete tasks owned by this user
+		await db.delete(tasks).where(and(eq(tasks.id, taskId), eq(tasks.userId, user.id)))
 
 		await broadcastTaskUpdate("task_deleted", {
 			id: taskId,

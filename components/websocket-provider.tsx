@@ -7,12 +7,21 @@ import {
 	disconnectWebSocket,
 	type WebSocketMessage,
 } from "@/lib/websocket"
-import { useTasksStore } from "@/store/tasks-store"
+import { useQueryClient } from "@tanstack/react-query"
+import { useDebouncedCallback } from "use-debounce"
 import { getWebSocketToken } from "@/app/actions/users"
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 	const { data: session } = useSession()
-	const fetchTasks = useTasksStore((state) => state.fetchTasks)
+	const queryClient = useQueryClient()
+
+	const debouncedInvalidateTasks = useDebouncedCallback(
+		() => {
+			queryClient.invalidateQueries({ queryKey: ["tasks"] })
+		},
+		1000,
+		{ leading: false, trailing: true }
+	)
 
 	useEffect(() => {
 		if (!session?.user?.id) {
@@ -43,8 +52,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 							case "task_updated":
 							case "task_deleted":
 							case "task_status_changed":
-								// Refetch all tasks when any task changes
-								fetchTasks()
+								debouncedInvalidateTasks()
 								break
 							default:
 								console.log("Unknown message type:", message.type)
@@ -68,7 +76,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 			isMounted = false
 			disconnectWebSocket()
 		}
-	}, [session?.user?.id, fetchTasks])
+	}, [session?.user?.id, debouncedInvalidateTasks])
 
 	return <>{children}</>
 }

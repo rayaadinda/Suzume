@@ -38,13 +38,14 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { CalendarIcon, X, Repeat } from "lucide-react"
+import { CalendarIcon, X, Repeat, Plus } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import { useTasksStore } from "@/store/tasks-store"
 import { getUsers } from "@/app/actions/users"
-import { getLabels } from "@/app/actions/labels"
+import { getLabels, createLabel } from "@/app/actions/labels"
 import { getStatuses } from "@/app/actions/statuses"
 import type { TaskWithRelations } from "@/app/actions/tasks"
 import type { UserData } from "@/app/actions/users"
@@ -71,6 +72,19 @@ const taskFormSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskFormSchema>
 
+const PRESET_COLORS = [
+	"bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-400",
+	"bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400",
+	"bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-400",
+	"bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400",
+	"bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400",
+	"bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
+	"bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
+	"bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400",
+	"bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400",
+	"bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400",
+]
+
 interface TaskDialogProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
@@ -88,6 +102,10 @@ export function TaskDialog({
 	const [labels, setLabels] = useState<LabelData[]>([])
 	const [statuses, setStatuses] = useState<StatusData[]>([])
 	const [loading, setLoading] = useState(false)
+	const [showLabelCreate, setShowLabelCreate] = useState(false)
+	const [newLabelName, setNewLabelName] = useState("")
+	const [newLabelColor, setNewLabelColor] = useState(PRESET_COLORS[0])
+	const [creatingLabel, setCreatingLabel] = useState(false)
 
 	const { addTask, updateTaskAction } = useTasksStore()
 
@@ -104,7 +122,9 @@ export function TaskDialog({
 			assigneeIds: task?.assignees.map((a) => a.id) || [],
 			labelIds: task?.labels.map((l) => l.id) || [],
 			isRecurring: task?.isRecurring || false,
-			recurrencePattern: (task?.recurrencePattern as TaskFormValues["recurrencePattern"]) || undefined,
+			recurrencePattern:
+				(task?.recurrencePattern as TaskFormValues["recurrencePattern"]) ||
+				undefined,
 			recurrenceInterval: task?.recurrenceInterval || 1,
 			recurrenceDays: task?.recurrenceDays
 				? JSON.parse(task.recurrenceDays)
@@ -114,6 +134,16 @@ export function TaskDialog({
 				: "",
 		},
 	})
+
+	// Load labels function
+	const loadLabels = async () => {
+		try {
+			const labelsData = await getLabels()
+			setLabels(labelsData)
+		} catch (error) {
+			console.error("Error loading labels:", error)
+		}
+	}
 
 	// Load users, labels, and statuses
 	useEffect(() => {
@@ -143,7 +173,9 @@ export function TaskDialog({
 				assigneeIds: task?.assignees.map((a) => a.id) || [],
 				labelIds: task?.labels.map((l) => l.id) || [],
 				isRecurring: task?.isRecurring || false,
-				recurrencePattern: (task?.recurrencePattern as TaskFormValues["recurrencePattern"]) || undefined,
+				recurrencePattern:
+					(task?.recurrencePattern as TaskFormValues["recurrencePattern"]) ||
+					undefined,
 				recurrenceInterval: task?.recurrenceInterval || 1,
 				recurrenceDays: task?.recurrenceDays
 					? JSON.parse(task.recurrenceDays)
@@ -196,6 +228,34 @@ export function TaskDialog({
 			)
 		} else {
 			form.setValue("labelIds", [...current, labelId])
+		}
+	}
+
+	const handleCreateLabel = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (!newLabelName.trim()) {
+			toast.error("Label name is required")
+			return
+		}
+
+		setCreatingLabel(true)
+		try {
+			const newLabel = await createLabel({
+				name: newLabelName.trim(),
+				color: newLabelColor,
+			})
+			toast.success(`Label "${newLabel.name}" created successfully`)
+			setNewLabelName("")
+			setNewLabelColor(PRESET_COLORS[0])
+			setShowLabelCreate(false)
+			await loadLabels()
+			// Auto-select the newly created label
+			form.setValue("labelIds", [...form.getValues("labelIds"), newLabel.id])
+		} catch (error) {
+			toast.error("Failed to create label")
+			console.error(error)
+		} finally {
+			setCreatingLabel(false)
 		}
 	}
 
@@ -437,7 +497,8 @@ export function TaskDialog({
 													}
 												/>
 												<FieldDescription>
-													Repeat every X {form.watch("recurrencePattern") || "period"}(s)
+													Repeat every X{" "}
+													{form.watch("recurrencePattern") || "period"}(s)
 												</FieldDescription>
 											</Field>
 										</div>
@@ -627,20 +688,113 @@ export function TaskDialog({
 											)
 										})}
 									</div>
-									<div className="border rounded-md p-2 space-y-1">
-										{labels.map((label) => (
-											<button
-												key={label.id}
+
+									{/* Quick Create Label Form */}
+									{showLabelCreate && (
+										<form
+											onSubmit={handleCreateLabel}
+											className="border rounded-md p-3 mb-2 space-y-3 bg-muted/50"
+										>
+											<div className="space-y-2">
+												<Input
+													placeholder="Label name..."
+													value={newLabelName}
+													onChange={(e) => setNewLabelName(e.target.value)}
+													disabled={creatingLabel}
+													autoFocus
+												/>
+												<div className="grid grid-cols-5 gap-1.5">
+													{PRESET_COLORS.map((color) => (
+														<button
+															key={color}
+															type="button"
+															onClick={() => setNewLabelColor(color)}
+															className={`h-8 rounded border-2 transition-all ${color} ${
+																newLabelColor === color
+																	? "border-foreground scale-105"
+																	: "border-transparent hover:scale-105"
+															}`}
+															disabled={creatingLabel}
+														/>
+													))}
+												</div>
+											</div>
+											<div className="flex gap-2">
+												<Button
+													type="submit"
+													size="sm"
+													disabled={creatingLabel}
+													className="flex-1"
+												>
+													{creatingLabel ? "Creating..." : "Create Label"}
+												</Button>
+												<Button
+													type="button"
+													size="sm"
+													variant="outline"
+													onClick={() => {
+														setShowLabelCreate(false)
+														setNewLabelName("")
+														setNewLabelColor(PRESET_COLORS[0])
+													}}
+													disabled={creatingLabel}
+												>
+													Cancel
+												</Button>
+											</div>
+										</form>
+									)}
+
+									{/* Labels List or Empty State */}
+									{labels.length === 0 ? (
+										<div className="border rounded-md p-6 text-center space-y-3">
+											<p className="text-sm text-muted-foreground">
+												No labels yet. Create your first label to get started.
+											</p>
+											<Button
 												type="button"
-												onClick={() => toggleLabel(label.id)}
-												className={`w-full text-left px-2 py-1.5 rounded-sm text-sm hover:bg-accent ${
-													selectedLabels.includes(label.id) ? "bg-accent" : ""
-												}`}
+												size="sm"
+												variant="outline"
+												onClick={() => setShowLabelCreate(true)}
 											>
-												{label.name}
-											</button>
-										))}
-									</div>
+												<Plus className="size-4 mr-2" />
+												Create Label
+											</Button>
+										</div>
+									) : (
+										<>
+											<div className="border rounded-md p-2 space-y-1 max-h-32 overflow-y-auto">
+												{labels.map((label) => (
+													<button
+														key={label.id}
+														type="button"
+														onClick={() => toggleLabel(label.id)}
+														className={`w-full text-left px-2 py-1.5 rounded-sm text-sm hover:bg-accent ${
+															selectedLabels.includes(label.id)
+																? "bg-accent"
+																: ""
+														}`}
+													>
+														<Badge className={`${label.color}`}>
+															{label.name}
+														</Badge>
+													</button>
+												))}
+											</div>
+											{!showLabelCreate && (
+												<Button
+													type="button"
+													size="sm"
+													variant="ghost"
+													onClick={() => setShowLabelCreate(true)}
+													className="w-full mt-2"
+												>
+													<Plus className="size-4 mr-2" />
+													Create New Label
+												</Button>
+											)}
+										</>
+									)}
 								</Field>
 							</FieldGroup>
 						</FieldSet>

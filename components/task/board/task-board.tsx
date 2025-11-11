@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useMemo, useState } from "react"
 import {
 	DndContext,
 	DragOverlay,
@@ -11,36 +11,39 @@ import {
 	DragStartEvent,
 	DragEndEvent,
 } from "@dnd-kit/core"
+import { useTasks, useUpdateTaskStatus } from "@/hooks/use-tasks"
 import { useTasksStore } from "@/store/tasks-store"
 import { statuses } from "@/mock-data/statuses"
 import { TaskColumn } from "./task-column"
 import { TaskCard } from "./task-card"
+import { TaskBoardSkeleton } from "./task-board-skeleton"
 import { ListView } from "../views/list-view"
 import { CalendarView } from "../views/calendar-view"
 import type { TaskWithRelations } from "@/app/actions/tasks"
 
 export function TaskBoard() {
-	const {
-		tasksByStatus,
-		tasks,
-		loading,
-		fetchTasks,
-		updateTaskStatusAction,
-		viewMode,
-	} = useTasksStore()
+	const { viewMode, filters } = useTasksStore()
+	const { data: tasks = [], isLoading } = useTasks(filters)
+	const updateTaskStatus = useUpdateTaskStatus()
 	const [activeTask, setActiveTask] = useState<TaskWithRelations | null>(null)
+
+	const tasksByStatus = useMemo(() => {
+		return tasks.reduce((acc, task) => {
+			if (!acc[task.statusId]) {
+				acc[task.statusId] = []
+			}
+			acc[task.statusId].push(task)
+			return acc
+		}, {} as Record<string, TaskWithRelations[]>)
+	}, [tasks])
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
 			activationConstraint: {
-				distance: 8, // 8px of movement required before drag starts
+				distance: 8,
 			},
 		})
 	)
-
-	useEffect(() => {
-		fetchTasks()
-	}, [fetchTasks])
 
 	const handleDragStart = (event: DragStartEvent) => {
 		const { active } = event
@@ -59,23 +62,14 @@ export function TaskBoard() {
 		const taskId = active.id as string
 		const newStatusId = over.id as string
 
-		// Find the task and check if status changed
 		const task = tasks.find((t) => t.id === taskId)
 		if (task && task.statusId !== newStatusId) {
-			updateTaskStatusAction(taskId, newStatusId)
+			updateTaskStatus.mutate({ taskId, statusId: newStatusId })
 		}
 	}
 
-	if (
-		loading &&
-		Object.keys(tasksByStatus).length === 0 &&
-		tasks.length === 0
-	) {
-		return (
-			<div className="flex h-full items-center justify-center">
-				<p className="text-muted-foreground">Loading tasks...</p>
-			</div>
-		)
+	if (isLoading) {
+		return <TaskBoardSkeleton />
 	}
 
 	if (viewMode === "list") {

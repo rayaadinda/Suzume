@@ -72,9 +72,7 @@ export function calculateTaskMetrics(tasks: TaskWithRelations[]): TaskMetrics {
   };
 }
 
-/**
- * Calculate priority distribution
- */
+
 export function calculatePriorityDistribution(tasks: TaskWithRelations[]): PriorityDistribution {
   return tasks.reduce((acc, task) => {
     const priority = task.priority as keyof PriorityDistribution;

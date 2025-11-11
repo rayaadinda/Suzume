@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/breadcrumb"
 import Link from "next/link"
 import { DashboardHeader } from "@/components/task/header/dashboard-header"
+import { SectionCards } from "@/components/section-card"
 
 export default function DashboardPage() {
 	const { tasks, loading, fetchTasks } = useTasksStore()
@@ -146,76 +147,10 @@ export default function DashboardPage() {
 					</div>
 
 					{/* Metrics Cards */}
-					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="text-sm font-medium">
-									Total Tasks
-								</CardTitle>
-								<ListTodo className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								<div className="text-2xl font-bold">{metrics.totalTasks}</div>
-								<p className="text-xs text-muted-foreground">
-									{metrics.inProgressTasks} in progress
-								</p>
-							</CardContent>
-						</Card>
-
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="text-sm font-medium">Completed</CardTitle>
-								<CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								<div className="text-2xl font-bold">
-									{metrics.completedTasks}
-								</div>
-								<p className="text-xs text-muted-foreground">
-									{metrics.completionRate}% completion rate
-								</p>
-							</CardContent>
-						</Card>
-
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="text-sm font-medium">This Week</CardTitle>
-								<Activity className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								<div className="text-2xl font-bold">
-									{weeklyProgress.thisWeek}
-								</div>
-								<p
-									className={cn(
-										"text-xs flex items-center gap-1",
-										weeklyProgress.percentageChange >= 0
-											? "text-green-600"
-											: "text-red-600"
-									)}
-								>
-									{weeklyProgress.percentageChange >= 0 ? (
-										<TrendingUp className="h-3 w-3" />
-									) : (
-										<TrendingDown className="h-3 w-3" />
-									)}
-									{Math.abs(weeklyProgress.percentageChange)}% from last week
-								</p>
-							</CardContent>
-						</Card>
-
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="text-sm font-medium">Overdue</CardTitle>
-								<AlertCircle className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								<div className="text-2xl font-bold">{metrics.overdueTasks}</div>
-								<p className="text-xs text-muted-foreground">
-									Avg completion: {metrics.averageCompletionTime} days
-								</p>
-							</CardContent>
-						</Card>
+					<div className="@container/main flex flex-1 flex-col gap-2 ">
+						<div className="flex flex-col gap-2 py-4 md:gap-6 md:py-4">
+							<SectionCards />
+						</div>
 					</div>
 
 					{/* Charts */}

@@ -13,8 +13,10 @@ import {
 	Search,
 	ChevronDown,
 	Calendar,
+	Briefcase,
 } from "lucide-react"
 import { usePathname } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import {
 	Sidebar,
@@ -27,6 +29,11 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { NavUser } from "@/components/task/sidebar/nav-user"
 import Link from "next/link"
+import { getTasks } from "@/app/actions/tasks"
+import { getJobApplications } from "@/app/actions/job-applications"
+import { getStatuses } from "@/app/actions/statuses"
+import { getLabels } from "@/app/actions/labels"
+import { getUsers } from "@/app/actions/users"
 
 interface SidebarItemProps {
 	icon: React.ReactNode
@@ -37,6 +44,41 @@ interface SidebarItemProps {
 }
 
 function SidebarItem({ icon, label, badge, active, href }: SidebarItemProps) {
+	const queryClient = useQueryClient()
+
+	const handlePrefetch = () => {
+		if (!href) return
+
+		if (href === "/tasks") {
+			queryClient.prefetchQuery({
+				queryKey: ["tasks"],
+				queryFn: getTasks,
+			})
+			queryClient.prefetchQuery({
+				queryKey: ["statuses"],
+				queryFn: getStatuses,
+			})
+			queryClient.prefetchQuery({
+				queryKey: ["labels"],
+				queryFn: getLabels,
+			})
+			queryClient.prefetchQuery({
+				queryKey: ["users"],
+				queryFn: getUsers,
+			})
+		} else if (href === "/job-applications") {
+			queryClient.prefetchQuery({
+				queryKey: ["jobApplications"],
+				queryFn: getJobApplications,
+			})
+		} else if (href === "/dashboard") {
+			queryClient.prefetchQuery({
+				queryKey: ["tasks"],
+				queryFn: getTasks,
+			})
+		}
+	}
+
 	if (href) {
 		return (
 			<Button
@@ -49,7 +91,7 @@ function SidebarItem({ icon, label, badge, active, href }: SidebarItemProps) {
 				)}
 				asChild
 			>
-				<Link href={href}>
+				<Link href={href} onMouseEnter={handlePrefetch}>
 					<div className="flex items-center gap-3 w-full">
 						<div className="shrink-0">{icon}</div>
 						<span className="flex-1">{label}</span>
@@ -98,7 +140,7 @@ export function TaskSidebar({
 				<div className="px-3 pt-4 border-2 border-border/50 rounded-2xl">
 					<div className="flex items-center gap-3 mb-4">
 						<Image
-							src="/ln.png"
+							src="/avatar.webp"
 							alt="Team Avatar"
 							className="size-10 object-cover rounded-lg"
 							width={40}
@@ -106,7 +148,7 @@ export function TaskSidebar({
 						/>
 						<div className="flex-1 min-w-0">
 							<p className="text-xs text-muted-foreground">Team</p>
-							<p className="font-semibold truncate">David Visuals</p>
+							<p className="font-semibold truncate">Asadekon</p>
 						</div>
 						<Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
 							<ChevronDown className="size-4 text-muted-foreground" />
@@ -144,11 +186,17 @@ export function TaskSidebar({
 						active={pathname === "/planning"}
 					/>
 					<SidebarItem
-					icon={<FileText className="size-4" />}
-					label="Notes"
-					href="/notes"
-					active={pathname === "/notes"}
-				/>
+						icon={<Briefcase className="size-4" />}
+						label="Job Applications"
+						href="/job-applications"
+						active={pathname === "/job-applications"}
+					/>
+					<SidebarItem
+						icon={<FileText className="size-4" />}
+						label="Notes"
+						href="/notes"
+						active={pathname === "/notes"}
+					/>
 					<SidebarItem
 						icon={<MessageSquare className="size-4" />}
 						label="Chat"

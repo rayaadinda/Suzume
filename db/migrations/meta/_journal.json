@@ -57,6 +57,27 @@
       "when": 1762402935555,
       "tag": "0007_ancient_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1762685060105,
+      "tag": "0008_busy_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1762686199908,
+      "tag": "0009_real_vargas",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1762860184980,
+      "tag": "0010_right_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }
